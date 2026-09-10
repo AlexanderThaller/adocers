@@ -172,7 +172,9 @@ pre code { background: none; padding: 0; }
    column, a rule between it and the text, and no box around the whole thing. */
 .admonitionblock { margin: 1.4rem 0; }
 .admonitionblock > table { width: 100%; border-collapse: separate; border: 0; background: none; }
-.admonitionblock td.icon { width: 80px; text-align: center; vertical-align: top; padding: 0 0.75rem 0 0; color: var(--admon); }
+/* The icon is centred against the whole admonition rather than sitting at its
+   top: the mark stands for the block, and a tall one left it stranded. */
+.admonitionblock td.icon { width: 80px; text-align: center; vertical-align: middle; padding: 0 0.75rem 0 0; color: var(--admon); }
 .admonitionblock td.icon .icon { width: 2.25rem; height: 2.25rem; }
 .admonitionblock td.icon .title { font-style: normal; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.03em; margin: 0; color: var(--admon); }
 .admonitionblock td.content { padding: 0 0 0 1.125rem; border-left: 1px solid var(--rule); vertical-align: top; }
