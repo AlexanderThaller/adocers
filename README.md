@@ -207,6 +207,38 @@ highlighted in the browser instead. `--no-highlight` leaves the code plain, and
 `--no-default-features` builds without the `highlight` feature, leaving the
 grammars out of the binary entirely.
 
+### The document header
+
+The title, author and revision are shown as labelled lines:
+
+```
+Author: Alexander Thaller <claude@thallerware.de>
+Version: 1.0, 2026-09-10
+```
+
+Both ways of writing a revision work — the `v1.0, 2026-09-10` line and the
+`:revnumber:`/`:revdate:` attributes — since the line sets those attributes
+anyway. A revision that is a date with no number is labelled `Date`.
+
+A header also carries attributes, and they come in two kinds: facts about the
+document, and instructions to the renderer. Only the first kind is shown.
+That means anything in Antora's `page-` namespace, with the prefix dropped, and
+the names documents conventionally use for their own metadata:
+
+| Written | Shown as |
+| --- | --- |
+| `:status: implementing` | Status: implementing |
+| `:page-tags: design, flux, ci` | Tags: design flux ci |
+| `:page-last-reviewed: 2026-01-01` | Last reviewed: 2026-01-01 |
+| `:keywords: alpha, beta` | Keywords: alpha beta |
+| `:sectnums:`, `:icons: font`, `:toc:` | *nothing — these are settings* |
+
+The named set is `status`, `keywords`, `category`, `edition`, `organization`
+and `copyright`. It is an allowlist, so an attribute nobody thought about is
+left out rather than shown by accident; prefix one with `page-` to have it
+shown. A list of tags or keywords is a set of separate things written with
+commas, so each is shown as its own mark.
+
 ### Admonition icons
 
 `NOTE`, `TIP`, `IMPORTANT`, `CAUTION` and `WARNING` are marked with an icon, in

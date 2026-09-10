@@ -25,7 +25,6 @@ use asciidoc_parser::{
     blocks::FindBlocks,
     document::{
         InterpretedValue,
-        RevisionLine,
         TocMode,
     },
 };
@@ -177,13 +176,22 @@ impl Renderer<'_> {
             return;
         };
 
-        let subtitle = match self.document.subtitle() {
-            Some(subtitle) => format!(": <span class=\"subtitle\">{subtitle}</span>"),
-            None => String::new(),
+        // `doctitle` is the whole title, subtitle included, so a title split
+        // into two parts has to be rebuilt from the parts — appending the
+        // subtitle to the whole would say it twice.
+        let heading = match (
+            self.document.header().main_title(),
+            self.document.subtitle(),
+        ) {
+            (Some(main), Some(subtitle)) => {
+                format!("{main}: <span class=\"subtitle\">{subtitle}</span>")
+            }
+
+            _ => title.to_string(),
         };
 
-        // Both halves are already inline-rendered by the parser.
-        self.out.line(&format!("<h1>{title}{subtitle}</h1>"));
+        // Every part is already inline-rendered by the parser.
+        self.out.line(&format!("<h1>{heading}</h1>"));
     }
 
     /// Render `#header`: the document title, author line and, for most TOC
@@ -229,19 +237,19 @@ impl Renderer<'_> {
             details.raw(&line);
         }
 
-        if let Some(revision) = self.document.header().revision_line() {
-            if let Some(line) = Self::revision(revision) {
-                details.raw(&line);
-            }
+        if let Some(line) = self.revision() {
+            details.raw(&line);
+        }
 
-            // The remark describes the revision rather than naming part of it,
-            // so it reads as its own sentence, set apart from the labels above.
-            if let Some(remark) = revision.revremark() {
-                details.line(&format!(
-                    "<div class=\"remark\"><span id=\"revremark\">{}</span></div>",
-                    escape_text(remark)
-                ));
-            }
+        details.raw(&self.metadata());
+
+        // The remark describes the revision rather than naming part of it, so
+        // it reads as its own sentence, set apart from the labels above.
+        if let Some(remark) = self.attribute("revremark") {
+            details.line(&format!(
+                "<div class=\"remark\"><span id=\"revremark\">{}</span></div>",
+                escape_text(&remark)
+            ));
         }
 
         details.finish()
@@ -293,25 +301,26 @@ impl Renderer<'_> {
             "Authors"
         };
 
-        Some(format!(
-            "<div class=\"detail\"><span class=\"label\">{label}:</span> {}</div>\n",
-            written.join(", ")
-        ))
+        Some(detail(label, &written.join(", ")))
     }
 
-    /// The `Version:` line, or `None` when the revision line holds neither a
-    /// number nor a date.
-    fn revision(revision: &RevisionLine<'_>) -> Option<String> {
-        let number = revision
-            .revnumber()
-            .map(|number| format!("<span id=\"revnumber\">{}</span>", escape_text(number)));
+    /// The `Version:` line, or `None` when the document names no revision.
+    ///
+    /// This reads the attributes rather than the revision line, because an
+    /// explicit `v1.0, 2026-09-10` line sets them too — so the two ways of
+    /// writing a revision, the line and `:revnumber:`/`:revdate:`, are one case
+    /// here rather than two.
+    fn revision(&self) -> Option<String> {
+        let number = self
+            .attribute("revnumber")
+            .map(|number| format!("<span id=\"revnumber\">{}</span>", escape_text(&number)));
 
-        let date = Some(revision.revdate())
-            .filter(|date| !date.is_empty())
-            .map(|date| format!("<span id=\"revdate\">{}</span>", escape_text(date)));
+        let date = self
+            .attribute("revdate")
+            .map(|date| format!("<span id=\"revdate\">{}</span>", escape_text(&date)));
 
-        // A revision line may carry a date and no number at all, and calling a
-        // date a version would be a plain misdescription.
+        // A revision may be a date with no number at all, and calling a date a
+        // version would be a plain misdescription.
         let (label, value) = match (number, date) {
             (Some(number), Some(date)) => ("Version", format!("{number}, {date}")),
             (Some(number), None) => ("Version", number),
@@ -319,9 +328,41 @@ impl Renderer<'_> {
             (None, None) => return None,
         };
 
-        Some(format!(
-            "<div class=\"detail\"><span class=\"label\">{label}:</span> {value}</div>\n"
-        ))
+        Some(detail(label, &value))
+    }
+
+    /// The rows for whatever else the header says about the document.
+    ///
+    /// A header holds two sorts of attribute: facts about the document, and
+    /// instructions to the renderer. `:status:` is the first sort and
+    /// `:sectnums:` the second, and only the first belongs in front of a
+    /// reader — so this shows a known set of metadata names plus everything in
+    /// Antora's `page-` namespace, which is defined as page metadata, and
+    /// leaves every other attribute alone.
+    fn metadata(&self) -> String {
+        let mut rows = String::new();
+
+        for attribute in self.document.header().attributes() {
+            let name = attribute.name().data();
+
+            let Some(shown) = displayed_as(name) else {
+                continue;
+            };
+
+            // An attribute set without a value — `:sectnums:` — says something
+            // to the renderer and nothing to a reader.
+            let InterpretedValue::Value(value) = attribute.value() else {
+                continue;
+            };
+
+            if value.is_empty() {
+                continue;
+            }
+
+            rows.push_str(&detail(&label_for(shown), &value_for(shown, value)));
+        }
+
+        rows
     }
 
     /// Render every top-level block, honouring the TOC placements that fall
@@ -408,6 +449,69 @@ impl Renderer<'_> {
             _ => None,
         }
     }
+}
+
+/// Header attributes shown to the reader as facts about the document.
+///
+/// Everything else a header sets — `sectnums`, `icons`, `source-highlighter` —
+/// is an instruction to the renderer rather than something a reader wants to
+/// read, so the list is an allowlist: an attribute nobody thought about is left
+/// out rather than shown by accident.
+const METADATA: &[&str] = &[
+    "status",
+    "keywords",
+    "category",
+    "edition",
+    "organization",
+    "copyright",
+];
+
+/// Antora's namespace for page metadata. An attribute in it is shown with the
+/// prefix dropped, so `:page-tags:` reads as `Tags`.
+const PAGE_PREFIX: &str = "page-";
+
+/// One labelled line of the document header.
+fn detail(label: &str, value: &str) -> String {
+    format!("<div class=\"detail\"><span class=\"label\">{label}:</span> {value}</div>\n")
+}
+
+/// The name an attribute is shown under, or `None` if it is not shown at all.
+fn displayed_as(name: &str) -> Option<&str> {
+    if let Some(rest) = name.strip_prefix(PAGE_PREFIX) {
+        return (!rest.is_empty()).then_some(rest);
+    }
+
+    METADATA.contains(&name).then_some(name)
+}
+
+/// The label for an attribute name: `page-last-reviewed` reads `Last reviewed`.
+fn label_for(name: &str) -> String {
+    let spaced = name.replace(['-', '_'], " ");
+    let mut characters = spaced.chars();
+
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => spaced,
+    }
+}
+
+/// The markup for an attribute's value.
+///
+/// A list of tags or keywords is a set of separate things that happens to be
+/// written with commas, so each is shown as its own mark rather than run
+/// together into a sentence.
+fn value_for(name: &str, value: &str) -> String {
+    if !matches!(name, "tags" | "keywords") {
+        return escape_text(value);
+    }
+
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+        .map(|tag| format!("<span class=\"tag\">{}</span>", escape_text(tag)))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Whether a TOC placement puts the outline above the document's content.
@@ -549,4 +653,56 @@ fn body_classes(document: &Document<'_>) -> String {
     }
 
     classes.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_setting_is_not_shown_to_the_reader() {
+        for name in [
+            "sectnums",
+            "icons",
+            "toc",
+            "source-highlighter",
+            "experimental",
+            "description",
+            "revnumber",
+            "author",
+            "page-",
+        ] {
+            assert_eq!(displayed_as(name), None, "`{name}` should not be shown");
+        }
+    }
+
+    #[test]
+    fn a_fact_about_the_document_is() {
+        assert_eq!(displayed_as("status"), Some("status"));
+        assert_eq!(displayed_as("keywords"), Some("keywords"));
+        assert_eq!(displayed_as("page-tags"), Some("tags"));
+        assert_eq!(displayed_as("page-last-reviewed"), Some("last-reviewed"));
+    }
+
+    #[test]
+    fn a_label_reads_as_a_phrase() {
+        assert_eq!(label_for("status"), "Status");
+        assert_eq!(label_for("last-reviewed"), "Last reviewed");
+        assert_eq!(label_for("tags"), "Tags");
+    }
+
+    #[test]
+    fn a_list_of_tags_becomes_separate_marks() {
+        let markup = value_for("tags", "design, flux , ci,,");
+
+        assert_eq!(markup.matches("class=\"tag\"").count(), 3);
+        assert!(markup.contains(">design<"));
+        assert!(markup.contains(">flux<"));
+    }
+
+    #[test]
+    fn any_other_value_is_plain_escaped_text() {
+        assert_eq!(value_for("status", "in <review>"), "in &lt;review&gt;");
+        assert_eq!(value_for("status", "a, b"), "a, b");
+    }
 }
