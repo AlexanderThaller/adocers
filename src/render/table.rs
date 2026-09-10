@@ -50,6 +50,15 @@ impl<'src> Renderer<'src> {
             );
         }
 
+        if let Some(float) = block
+            .attrlist()
+            .and_then(|attrlist| attrlist.named_attribute("float"))
+            .map(asciidoc_parser::attributes::ElementAttribute::value)
+            .filter(|float| !float.is_empty())
+        {
+            classes.push(float.to_string());
+        }
+
         // The block's own roles come last, after every class the table's own
         // shape called for.
         classes.extend(block.roles().into_iter().map(str::to_string));
@@ -198,13 +207,18 @@ impl<'src> Renderer<'src> {
         open.push('>');
         self.out.raw(&open);
 
-        self.cell_content(cell, header);
+        self.cell_content(cell, is_header);
 
         self.out.line(&format!("</{tag}>"));
     }
 
     /// Emit the inside of a cell, in whichever of the six cell styles applies.
-    fn cell_content(&mut self, cell: &'src TableCell<'src>, header: bool) {
+    ///
+    /// `in_header_row` is not the same question as whether the cell is a
+    /// `<th>`: a cell in the header row carries its text bare, while an
+    /// `h`-styled cell in the body is a `<th>` that still wraps its text
+    /// like every other cell.
+    fn cell_content(&mut self, cell: &'src TableCell<'src>, in_header_row: bool) {
         match cell.content() {
             TableCellContent::Simple(content) => {
                 let rendered = content.rendered_html();
@@ -216,41 +230,38 @@ impl<'src> Renderer<'src> {
                     return;
                 }
 
-                // A header cell is already emphasized by its element, so it
-                // carries the text directly rather than wrapping it.
-                if header {
+                if in_header_row {
                     self.out.raw(rendered);
                     return;
                 }
 
-                match cell.style() {
-                    ColumnStyle::Literal => {
-                        self.out.raw(&format!(
-                            "<div class=\"literal\"><pre>{rendered}</pre></div>"
-                        ));
-                    }
-
-                    ColumnStyle::Emphasis => {
-                        self.out
-                            .raw(&format!("<p class=\"tableblock\"><em>{rendered}</em></p>"));
-                    }
-
-                    ColumnStyle::Strong => {
-                        self.out.raw(&format!(
-                            "<p class=\"tableblock\"><strong>{rendered}</strong></p>"
-                        ));
-                    }
-
-                    ColumnStyle::Monospace => {
-                        self.out.raw(&format!(
-                            "<p class=\"tableblock\"><code>{rendered}</code></p>"
-                        ));
-                    }
-
-                    _ => self
-                        .out
-                        .raw(&format!("<p class=\"tableblock\">{rendered}</p>")),
+                // A literal cell is one box however many blank lines are in it;
+                // every other style breaks into a paragraph apiece, the way the
+                // same text would outside a table.
+                if cell.style() == ColumnStyle::Literal {
+                    self.out.raw(&format!(
+                        "<div class=\"literal\"><pre>{rendered}</pre></div>"
+                    ));
+                    return;
                 }
+
+                let (open, close) = match cell.style() {
+                    ColumnStyle::Emphasis => ("<em>", "</em>"),
+                    ColumnStyle::Strong => ("<strong>", "</strong>"),
+                    ColumnStyle::Monospace => ("<code>", "</code>"),
+                    _ => ("", ""),
+                };
+
+                let wrapped: Vec<String> = paragraphs(rendered)
+                    .into_iter()
+                    .map(|paragraph| {
+                        format!("<p class=\"tableblock\">{open}{paragraph}{close}</p>")
+                    })
+                    .collect();
+
+                // Joined rather than each on its own line: the last one is
+                // followed directly by the closing `</td>`.
+                self.out.raw(&wrapped.join("\n"));
             }
 
             // An AsciiDoc cell is a document in its own right; its blocks
@@ -330,6 +341,32 @@ fn valign(cell: VerticalAlignment, column: Option<&TableColumn>) -> &'static str
     }
 }
 
+/// Split a cell's content into the paragraphs it was written as.
+///
+/// A blank line starts a new paragraph, exactly as it would outside a table; a
+/// single newline is a soft wrap and stays where the author put it.
+fn paragraphs(rendered: &str) -> Vec<String> {
+    let mut paragraphs = Vec::new();
+    let mut current: Vec<&str> = Vec::new();
+
+    for line in rendered.lines() {
+        if line.trim().is_empty() {
+            if !current.is_empty() {
+                paragraphs.push(current.join("\n"));
+                current.clear();
+            }
+        } else {
+            current.push(line);
+        }
+    }
+
+    if !current.is_empty() {
+        paragraphs.push(current.join("\n"));
+    }
+
+    paragraphs
+}
+
 /// A full column width: 100%, counted in the ten-thousandths of a percent that
 /// [`percentage`] works in.
 const FULL: u64 = 100 * 10_000;
@@ -351,7 +388,9 @@ fn percentage(width: usize, total: usize) -> u64 {
     // width rather than wrap around.
     let scaled = width.saturating_mul(FULL);
 
-    (scaled + total / 2) / total
+    // Truncated rather than rounded to nearest: Asciidoctor throws the last
+    // digits away and lets `balance` hand the shortfall to the final column.
+    scaled / total
 }
 
 /// Give the last measured column whatever the others' rounding left over, so

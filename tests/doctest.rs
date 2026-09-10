@@ -28,13 +28,9 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // Tables: column widths are rounded where Asciidoctor truncates, `float=`
-    // is not read, an `h` cell loses its paragraph wrapper, and several
-    // paragraphs in one cell are run together into one.
-    "table__cell-with-paragraphs",
+    // Waiting on the bare `[source]` fix below; its table markup is already
+    // right.
     "table__insane-cells-formatting",
-    "table__with-cols-styles",
-    "table__with-float",
     // `options="nowrap"` is not read, a bare `[source]` misses the `highlight`
     // wrapper, STEM content is not delimited for MathJax, and `[abstract]`
     // renders as a plain open block.
