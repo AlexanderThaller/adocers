@@ -237,9 +237,7 @@ impl Renderer<'_> {
             details.raw(&line);
         }
 
-        if let Some(line) = self.revision() {
-            details.raw(&line);
-        }
+        details.raw(&self.revision());
 
         details.raw(&self.metadata());
 
@@ -304,31 +302,30 @@ impl Renderer<'_> {
         Some(detail(label, &written.join(", ")))
     }
 
-    /// The `Version:` line, or `None` when the document names no revision.
+    /// The `Version:` and `Date:` lines.
     ///
-    /// This reads the attributes rather than the revision line, because an
+    /// These read the attributes rather than the revision line, because an
     /// explicit `v1.0, 2026-09-10` line sets them too — so the two ways of
     /// writing a revision, the line and `:revnumber:`/`:revdate:`, are one case
-    /// here rather than two.
-    fn revision(&self) -> Option<String> {
-        let number = self
-            .attribute("revnumber")
-            .map(|number| format!("<span id=\"revnumber\">{}</span>", escape_text(&number)));
+    /// here rather than two. Either may appear without the other.
+    fn revision(&self) -> String {
+        let mut rows = String::new();
 
-        let date = self
-            .attribute("revdate")
-            .map(|date| format!("<span id=\"revdate\">{}</span>", escape_text(&date)));
+        if let Some(number) = self.attribute("revnumber") {
+            rows.push_str(&detail(
+                "Version",
+                &format!("<span id=\"revnumber\">{}</span>", escape_text(&number)),
+            ));
+        }
 
-        // A revision may be a date with no number at all, and calling a date a
-        // version would be a plain misdescription.
-        let (label, value) = match (number, date) {
-            (Some(number), Some(date)) => ("Version", format!("{number}, {date}")),
-            (Some(number), None) => ("Version", number),
-            (None, Some(date)) => ("Date", date),
-            (None, None) => return None,
-        };
+        if let Some(date) = self.attribute("revdate") {
+            rows.push_str(&detail(
+                "Date",
+                &format!("<span id=\"revdate\">{}</span>", escape_text(&date)),
+            ));
+        }
 
-        Some(detail(label, &value))
+        rows
     }
 
     /// The rows for whatever else the header says about the document.

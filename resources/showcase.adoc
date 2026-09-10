@@ -65,9 +65,10 @@ v1.0, 2026-09-10: a remark    <1>
 <1> The revision line, on the line below the author.
 <2> The same thing, written as the attributes it sets.
 
-The remark is a sentence about the revision rather than another value belonging
-to it, so it is set apart below the labels. A revision that is a date with no
-number is labelled `Date`, because a date is not a version.
+The version and the date are two facts and take a line each, so a document that
+carries only one of them says only that one. The remark is a sentence about the
+revision rather than another value belonging to it, so it is set apart below the
+labels.
 
 === Other metadata
 

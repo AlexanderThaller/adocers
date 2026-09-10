@@ -213,12 +213,14 @@ The title, author and revision are shown as labelled lines:
 
 ```
 Author: Alexander Thaller <claude@thallerware.de>
-Version: 1.0, 2026-09-10
+Version: 1.0
+Date: 2026-09-10
 ```
 
 Both ways of writing a revision work — the `v1.0, 2026-09-10` line and the
 `:revnumber:`/`:revdate:` attributes — since the line sets those attributes
-anyway. A revision that is a date with no number is labelled `Date`.
+anyway. The version and the date take a line each, so a document carrying only
+one of them says only that one.
 
 A header also carries attributes, and they come in two kinds: facts about the
 document, and instructions to the renderer. Only the first kind is shown.
