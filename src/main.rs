@@ -89,6 +89,7 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
             fragment: true,
             stylesheet: None,
             body_suffix: String::new(),
+            icons: !common.no_icons,
             mermaid: mermaid(common),
         });
     }
@@ -107,6 +108,7 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
         fragment: false,
         stylesheet,
         body_suffix: String::new(),
+        icons: !common.no_icons,
         mermaid: mermaid(common),
     })
 }

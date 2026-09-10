@@ -10,6 +10,7 @@ mod block;
 mod css;
 mod diagram;
 mod html;
+mod icons;
 mod list;
 mod media;
 mod table;
@@ -46,6 +47,9 @@ pub struct Options {
     ///
     /// Ignored when [`fragment`](Self::fragment) is set, for the same reason.
     pub body_suffix: String,
+
+    /// Whether an admonition is marked with an icon rather than its label.
+    pub icons: bool,
 
     /// Where the browser fetches mermaid from to draw diagrams, or `None` to
     /// render a diagram as the listing block it was written as.

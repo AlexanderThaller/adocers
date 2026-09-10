@@ -15,7 +15,12 @@ pub const DEFAULT: &str = r#"
   --accent: #1565a8;
   --code-bg: #f5f6f8;
   --sidebar-bg: #f2f4f7;
-  --admon-bg: #f5f6f8;
+  /* Asciidoctor's own admonition colours. */
+  --admon-note: #19407c;
+  --admon-tip: #b58900;
+  --admon-important: #bf6900;
+  --admon-caution: #bf3400;
+  --admon-warning: #bf0000;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,7 +32,12 @@ pub const DEFAULT: &str = r#"
     --accent: #6cb2f0;
     --code-bg: #1e2126;
     --sidebar-bg: #1e2126;
-    --admon-bg: #1e2126;
+    /* Lightened, because Asciidoctor's are chosen against a white page. */
+    --admon-note: #6ea8e8;
+    --admon-tip: #e3b341;
+    --admon-important: #e08c3e;
+    --admon-caution: #f0764a;
+    --admon-warning: #f0716f;
   }
 }
 
@@ -83,17 +93,21 @@ pre code { background: none; padding: 0; }
 .attribution { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
 .attribution cite { font-style: italic; }
 
-/* Admonitions */
-.admonitionblock { margin: 1.25rem 0; }
-.admonitionblock > table { width: 100%; border-collapse: collapse; background: var(--admon-bg); border-radius: 6px; }
-.admonitionblock td.icon { width: 6.5rem; padding: 0.9rem 0 0.9rem 1rem; vertical-align: top; }
-.admonitionblock td.icon .title { font-style: normal; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.04em; margin: 0; }
-.admonitionblock td.content { padding: 0.9rem 1rem; vertical-align: top; }
-.admonitionblock.note td.icon .title { color: #1565a8; }
-.admonitionblock.tip td.icon .title { color: #2f855a; }
-.admonitionblock.important td.icon .title { color: #b7791f; }
-.admonitionblock.caution td.icon .title { color: #c05621; }
-.admonitionblock.warning td.icon .title { color: #c53030; }
+/* Admonitions, laid out as Asciidoctor lays them out: a wide centred icon
+   column, a rule between it and the text, and no box around the whole thing. */
+.admonitionblock { margin: 1.4rem 0; }
+.admonitionblock > table { width: 100%; border-collapse: separate; border: 0; background: none; }
+.admonitionblock td.icon { width: 80px; text-align: center; vertical-align: top; padding: 0 0.75rem 0 0; color: var(--admon); }
+.admonitionblock td.icon .icon { width: 2.25rem; height: 2.25rem; }
+.admonitionblock td.icon .title { font-style: normal; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.03em; margin: 0; color: var(--admon); }
+.admonitionblock td.content { padding: 0 0 0 1.125rem; border-left: 1px solid var(--rule); vertical-align: top; }
+.admonitionblock td.content > :last-child { margin-bottom: 0; }
+.admonitionblock td.content > .title { text-transform: uppercase; font-style: normal; font-weight: 600; }
+.admonitionblock.note { --admon: var(--admon-note); }
+.admonitionblock.tip { --admon: var(--admon-tip); }
+.admonitionblock.important { --admon: var(--admon-important); }
+.admonitionblock.caution { --admon: var(--admon-caution); }
+.admonitionblock.warning { --admon: var(--admon-warning); }
 
 /* Sidebars, examples, open blocks */
 .sidebarblock { background: var(--sidebar-bg); border-radius: 6px; padding: 1rem 1.25rem; margin: 1.25rem 0; }

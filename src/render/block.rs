@@ -24,6 +24,7 @@ use crate::render::{
         escape_attr,
         escape_text,
     },
+    icons,
 };
 
 impl<'src> Renderer<'src> {
@@ -307,18 +308,26 @@ impl<'src> Renderer<'src> {
         self.out.line("<tr>");
         self.out.line("<td class=\"icon\">");
 
-        if admonition.icons_font() {
-            // Font icons come from a Font Awesome stylesheet the page has to
-            // supply; without one the label below is still readable.
-            self.out.line(&format!(
-                "<i class=\"fa icon-{name}\" title=\"{}\"></i>",
-                escape_attr(&label)
-            ));
-        } else {
-            self.out.line(&format!(
+        // The icon carries the label as its accessible name, so nothing is lost
+        // by drawing one instead of writing the other. A variant with no icon
+        // of its own falls back to the label rather than to an empty column.
+        //
+        // Asciidoctor's `icons=font` markup is not emitted: it names Font
+        // Awesome classes, and a page this tool produced has no way to pull in
+        // that webfont, so the column came out blank.
+        let icon = self
+            .options
+            .icons
+            .then(|| icons::admonition(name, &label))
+            .flatten();
+
+        match icon {
+            Some(icon) => self.out.line(&icon),
+
+            None => self.out.line(&format!(
                 "<div class=\"title\">{}</div>",
                 escape_text(&label)
-            ));
+            )),
         }
 
         self.out.line("</td>");

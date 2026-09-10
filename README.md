@@ -35,6 +35,7 @@ adocers -o - doc.adoc       # writes to standard output
 | `--css <FILE>` | Embed this stylesheet instead of the built-in one. |
 | `--no-css` | Emit the page unstyled. |
 | `-a, --attribute <NAME[=VALUE]>` | Set a document attribute. `NAME`, `NAME=VALUE`, `NAME!` and `!NAME` all work, and the document cannot override them. Repeatable. |
+| `--no-icons` | Mark admonitions with their label instead of an icon. |
 | `--mermaid-url <URL>` | Where the browser fetches mermaid from. Point it at a copy you host to work offline. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
@@ -162,6 +163,24 @@ light/dark preference.
 `asciidoc-parser` renders inline content only; block and document assembly is
 this tool's own back end (`src/render/`). `render` and `serve` go through the
 same pipeline, so a document looks the same either way.
+
+### Admonition icons
+
+`NOTE`, `TIP`, `IMPORTANT`, `CAUTION` and `WARNING` are marked with an icon, in
+the layout Asciidoctor uses: a wide centred icon column, a rule between it and
+the text, and no box around the whole thing. The colours are Asciidoctor's own,
+lightened under a dark scheme, where its choices were made against a white page.
+
+The icons are inline SVG rather than the Font Awesome glyphs Asciidoctor names
+with `:icons: font`. A page this tool produces has no way to pull in that
+webfont, so the icon column came out blank; an SVG costs about a hundred bytes,
+needs no network, and takes its colour from `currentColor`, so one rule per
+admonition themes it in both schemes. Each icon carries its label as an
+`aria-label`, so nothing is lost to a screen reader by drawing the mark instead
+of writing the word.
+
+`--no-icons` goes back to the uppercase text labels, which is what Asciidoctor
+emits when `:icons:` is not set.
 
 ### Mermaid diagrams
 

@@ -65,6 +65,10 @@ pub struct CommonArgs {
     )]
     pub attributes: Vec<String>,
 
+    /// Mark admonitions with their label instead of an icon.
+    #[arg(long = "no-icons", global = true)]
+    pub no_icons: bool,
+
     /// Where the browser fetches mermaid from to draw diagrams.
     ///
     /// Point this at a copy you host yourself to render pages that must work
