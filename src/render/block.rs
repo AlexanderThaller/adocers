@@ -114,10 +114,48 @@ impl<'src> Renderer<'src> {
                     return;
                 }
 
-                self.open_wrapper(block, "paragraph");
-                self.block_title(block);
-                self.out.line(&format!("<p>{content}</p>"));
-                self.out.close("div");
+                // A style can make one paragraph into a block of another kind,
+                // saving its author the delimiters. The content then sits bare
+                // inside that block rather than in a `<p>` of its own, which is
+                // what the delimited form would have given it.
+                match block.declared_style() {
+                    Some("sidebar") => {
+                        self.open_wrapper(block, "sidebarblock");
+                        self.out.open("div", None, &["content"]);
+                        self.block_title(block);
+                        self.out.line(content);
+                        self.out.close("div");
+                        self.out.close("div");
+                    }
+
+                    Some("example") => {
+                        self.open_wrapper(block, "exampleblock");
+                        self.block_title(block);
+                        self.out.open("div", None, &["content"]);
+                        self.out.line(content);
+                        self.out.close("div");
+                        self.out.close("div");
+                    }
+
+                    Some("abstract") => {
+                        let classes = wrapper_classes(block, &["quoteblock", "abstract"]);
+                        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+                        self.out.open("div", block.id(), &classes);
+                        self.block_title(block);
+                        self.out.line("<blockquote>");
+                        self.out.line(content);
+                        self.out.line("</blockquote>");
+                        self.out.close("div");
+                    }
+
+                    _ => {
+                        self.open_wrapper(block, "paragraph");
+                        self.block_title(block);
+                        self.out.line(&format!("<p>{content}</p>"));
+                        self.out.close("div");
+                    }
+                }
             }
 
             SimpleBlockStyle::Literal => self.literal(block, content),
