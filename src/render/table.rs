@@ -20,14 +20,13 @@ use asciidoc_parser::blocks::{
 
 use crate::render::{
     Renderer,
-    block,
     html::escape_attr,
 };
 
 impl<'src> Renderer<'src> {
     /// Render a `|===` table.
     pub(super) fn table_block(&mut self, block: &'src Block<'src>, table: &'src TableBlock<'src>) {
-        let mut classes = block::wrapper_classes(block, "tableblock");
+        let mut classes = vec!["tableblock".to_string()];
         classes.push(frame_class(table.frame()));
         classes.push(grid_class(table.grid()));
 
@@ -35,14 +34,25 @@ impl<'src> Renderer<'src> {
             classes.push(stripes);
         }
 
-        classes.push(
-            if table.is_autowidth() {
-                "fit-content"
-            } else {
-                "stretch"
-            }
-            .to_string(),
-        );
+        // A `[width=NN%]` narrower than the page says how wide the table is
+        // outright, which leaves nothing for either sizing class to say: it
+        // overrides autowidth as well as the default of filling the page.
+        let width = table.width().filter(|&width| width < 100);
+
+        if width.is_none() {
+            classes.push(
+                if table.is_autowidth() {
+                    "fit-content"
+                } else {
+                    "stretch"
+                }
+                .to_string(),
+            );
+        }
+
+        // The block's own roles come last, after every class the table's own
+        // shape called for.
+        classes.extend(block.roles().into_iter().map(str::to_string));
 
         let mut open = String::from("<table");
 
@@ -52,9 +62,7 @@ impl<'src> Renderer<'src> {
 
         let _ = write!(open, " class=\"{}\"", escape_attr(&classes.join(" ")));
 
-        // An explicit `[width=NN%]` narrows the table; autowidth lets the
-        // browser size it from the content instead.
-        if let Some(width) = table.width().filter(|_| !table.is_autowidth()) {
+        if let Some(width) = width {
             let _ = write!(open, " style=\"width: {width}%;\"");
         }
 
