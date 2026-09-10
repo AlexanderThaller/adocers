@@ -1,3 +1,6 @@
 [submodule "resources/asciidoctor-doctest"]
 	path = resources/asciidoctor-doctest
 	url = https://github.com/asciidoctor-contrib/asciidoctor-doctest
+[submodule "resources/asciidoctor.org"]
+	path = resources/asciidoctor.org
+	url = https://github.com/asciidoctor/asciidoctor.org/
