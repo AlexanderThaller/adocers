@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 96" width="660" height="96" role="img" aria-label="AsciiDoc source is parsed into a block tree, which the back end turns into HTML">
+  <style>
+    .box { fill: none; stroke: #5a9fd4; stroke-width: 1.5; rx: 6; }
+    .label { fill: #7f8c99; font: 13px -apple-system, "Segoe UI", Roboto, sans-serif; text-anchor: middle; }
+    .arrow { stroke: #7f8c99; stroke-width: 1.5; fill: none; }
+  </style>
+  <defs>
+    <marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 8 4 0 8z" fill="#7f8c99"/>
+    </marker>
+  </defs>
+
+  <rect class="box" x="8" y="28" width="150" height="40"/>
+  <text class="label" x="83" y="53">.adoc source</text>
+  <path class="arrow" d="M162 48h44" marker-end="url(#tip)"/>
+
+  <rect class="box" x="212" y="28" width="180" height="40"/>
+  <text class="label" x="302" y="53">asciidoc-parser</text>
+  <path class="arrow" d="M396 48h44" marker-end="url(#tip)"/>
+
+  <rect class="box" x="446" y="28" width="150" height="40"/>
+  <text class="label" x="521" y="53">HTML back end</text>
+  <path class="arrow" d="M600 48h44" marker-end="url(#tip)"/>
+
+  <text class="label" x="652" y="53" style="text-anchor: end">→</text>
+</svg>

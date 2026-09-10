@@ -157,10 +157,16 @@ table.stripes-even tbody tr:nth-child(even),
 table.stripes-odd tbody tr:nth-child(odd),
 table.stripes-all tbody tr { background: var(--code-bg); }
 table.stripes-hover tbody tr:hover { background: var(--code-bg); }
-td.halign-center, th.halign-center { text-align: center; }
-td.halign-right, th.halign-right { text-align: right; }
-td.valign-middle, th.valign-middle { vertical-align: middle; }
-td.valign-bottom, th.valign-bottom { vertical-align: bottom; }
+/* A cell's own alignment has to out-specify the defaults above, or a header
+   cell would silently ignore the `^` or `>` its author wrote. */
+table.tableblock td.halign-center, table.tableblock th.halign-center { text-align: center; }
+table.tableblock td.halign-right, table.tableblock th.halign-right { text-align: right; }
+table.tableblock td.halign-left, table.tableblock th.halign-left { text-align: left; }
+table.tableblock td.valign-middle, table.tableblock th.valign-middle { vertical-align: middle; }
+table.tableblock td.valign-bottom, table.tableblock th.valign-bottom { vertical-align: bottom; }
+/* A literal cell is still a table cell: the code-block chrome would make the
+   row taller than its neighbours and push its text out of line with them. */
+table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; }
 
 /* Side-docked table of contents on wide screens */
 @media (min-width: 62rem) {

@@ -1,0 +1,490 @@
+= adocers Showcase
+Alexander Thaller <claude@thallerware.de>
+v1.0, 2026-09-10: one page through every feature
+:toc: left
+:toclevels: 3
+:sectnums:
+:experimental:
+:description: Every block, list, table and diagram adocers knows how to render, \
+with the AsciiDoc that produced it.
+
+This document is written the way Asciidoctor's Writer's Guide is written: each
+feature is explained, the AsciiDoc that produces it is shown, and the result
+sits directly underneath. Rendering this file is therefore also the quickest way
+to see whether a change to the renderer broke anything.
+
+[source,console]
+----
+adocers resources/showcase.adoc          # writes resources/showcase.html
+adocers serve resources                  # or read it in a browser
+----
+
+TIP: Everything below is rendered by the back end in `src/render/`.
+`asciidoc-parser` renders inline content — bold, links, cross references — but
+stops there: assembling blocks and documents is this tool's own work.
+
+== Text
+
+=== Inline formatting
+
+Text carries the usual marks. `+*bold*+`, `+_italic_+`, `+`monospace`+`,
+`+#highlighted#+`, `+^super^+` and `+~sub~+` all behave as you would expect,
+and doubling the delimiter applies a mark inside a word.
+
+[source,asciidoc]
+----
+*bold*, _italic_, `monospace`, #highlighted#, ^super^ and ~sub~,
+un**frigging**believable, and `*monospaced bold*`.
+----
+
+*bold*, _italic_, `monospace`, #highlighted#, ^super^ and ~sub~,
+un**frigging**believable, and `*monospaced bold*`.
+
+A pair of `+` signs passes text through untouched, which is how the delimiters
+above appear in this paragraph at all. Three of them, `+++<b>like this</b>+++`,
+pass raw HTML straight to the page.
+
+WARNING: Passthroughs and attribute references emit unescaped HTML *by design*.
+If you render AsciiDoc you did not write and serve the result to other people,
+run it through a sanitizer such as `ammonia` first. Safe mode does not cover
+this: it governs how far a document may reach outside itself, not what it may
+put on the page.
+
+=== Links, references and footnotes
+
+A bare URL such as https://asciidoc.org becomes a link, and
+https://asciidoc.org[the syntax reference] gives it a label. Cross references
+point at a section by its ID: <<tables>> and <<_admonitions>> both work, the
+first because that section carries an explicit anchor.
+
+Footnotes collect at the foot of the page.footnote:[Like this one. The
+definitions are gathered into a `#footnotes` block, so every reference in the
+body has something to link to.]
+
+=== Attributes
+
+Attributes set in the header are substituted wherever they are referenced.
+Because this document sets `+:experimental:+`, the UI macros work too: press
+kbd:[Ctrl+S] to save, click btn:[Apply], then choose menu:File[Export > HTML].
+
+Character references such as `+&#8594;+` (&#8594;) and the built-in
+`+{nbsp}+`, `+{mdash}+` and `+{zwsp}+` are available. Setting an attribute on
+the command line with `-a name=value` locks it, so the document cannot override
+what you asked for.
+
+== Lists
+
+=== Unordered
+
+[source,asciidoc]
+----
+* first level
+** second level
+*** third level
++
+A block attached with a `+` continuation.
+----
+
+* first level
+** second level
+*** third level
++
+A block attached with a `+` continuation.
+
+The bullet is chosen with a block style:
+
+[square]
+* `[square]`
+* changes the marker
+
+=== Checklists
+
+[source,asciidoc]
+----
+* [x] finished
+* [ ] not finished
+----
+
+* [x] finished
+* [ ] not finished
+
+=== Ordered
+
+An ordered list is numbered by how many dots its marker has: one for arabic,
+two for lower alpha, three for lower roman, four for upper alpha, five for
+upper roman.
+
+. arabic
+.. lower alpha
+... lower roman
+.... upper alpha
+..... upper roman
+
+`[start=N]` begins somewhere other than one, and `[%reversed]` counts down.
+
+[start=7]
+. seven
+. eight
+
+=== Description lists
+
+Term:: The definition that follows it.
+Another term:: Its own definition, which can carry
++
+--
+An attached block, if the definition needs one.
+--
+
+`[horizontal]` sets the terms beside their definitions:
+
+[horizontal]
+CPU:: Central processing unit
+RAM:: Random access memory
+NIC:: Network interface controller
+
+`[qanda]` numbers the terms as questions:
+
+[qanda]
+What is AsciiDoc?:: A plain-text writing format for structured documents.
+Why not Markdown?:: Because tables, admonitions, includes and cross references
+are part of the language rather than of each tool's dialect.
+
+== Blocks
+
+=== Listings and source
+
+A `----` block is verbatim. Adding a language emits the class and `data-lang`
+attribute that a client-side highlighter looks for — this renderer sets up the
+hooks but does not highlight anything itself.
+
+[source,rust]
+----
+fn main() {
+    let parser = Parser::default();          // <1>
+    let document = parser.parse(source);     // <2>
+    println!("{}", render(&document, &options));
+}
+----
+<1> Callouts attach to the lines they mark.
+<2> They render as an ordered list beneath the block.
+
+=== Literal blocks
+
+A `....` block keeps its spacing and applies no substitutions at all.
+
+....
+  literal   text   keeps   every   space
+  and every line break
+....
+
+=== Quotes and verses
+
+[quote,Ursula K. Le Guin,The Left Hand of Darkness]
+____
+Light is the left hand of darkness, and darkness the right hand of light.
+____
+
+A verse keeps the line breaks the author wrote:
+
+[verse,Anonymous]
+____
+Roses are red,
+  violets are blue,
+    this block is preformatted
+      and so is this line too.
+____
+
+=== Examples, sidebars and open blocks
+
+.An example block
+====
+An example groups content and, when it carries a title, is numbered.
+====
+
+.A collapsible example
+[%collapsible]
+====
+`[%collapsible]` turns an example into a disclosure widget. Its title becomes
+the summary rather than a heading above it. Add `%open` to have it start open.
+====
+
+.A sidebar
+****
+A sidebar holds an aside — related material that would interrupt the sentence
+it sits beside. Its title lives inside the box.
+****
+
+--
+An open block groups content without implying anything about it.
+--
+
+'''
+
+A `'''` line is a thematic break, as above. A `<<<` line is a page break: it
+emits a hint for print stylesheets and shows nothing on screen.
+
+[#_admonitions]
+== Admonitions
+
+Five kinds, each marked with an icon that takes its colour from the page and
+carries its label as an accessible name. `--no-icons` goes back to the
+uppercase text labels Asciidoctor emits when `+:icons:+` is not set.
+
+NOTE: Something worth knowing that is not essential to the task.
+
+TIP: A better way of doing what you are already doing.
+
+IMPORTANT: Something you should not miss, though nothing breaks if you do.
+
+CAUTION: Proceeding carelessly here risks losing work.
+
+WARNING: This one can damage something that is hard to put back.
+
+.An admonition with a title and several blocks
+[NOTE]
+====
+The delimited form holds as much as you like.
+
+* including lists
+* and anything else
+====
+
+== Diagrams
+
+A block written as `[mermaid]` or `[source,mermaid]` is drawn as a diagram.
+Both spellings are recognized, because a document that has to render here *and*
+on GitHub usually picks between them with an attribute.
+
+[source,asciidoc]
+------
+[mermaid]
+----
+flowchart LR
+    A --> B
+----
+------
+
+[mermaid]
+----
+flowchart LR
+    SRC[".adoc source"] --> PARSE[asciidoc-parser]
+    PARSE --> TREE[block tree]
+    TREE --> HTML[HTML back end]
+    HTML --> PAGE[page]
+    HTML -- "--fragment" --> FRAG[body only]
+    PARSE -- warnings --> DIAG[ariadne diagnostics]
+----
+
+The diagram is drawn in the browser rather than at build time, so no headless
+browser has to be installed alongside this one. It follows your colour scheme
+and is redrawn if you change it. A diagram is shown at the size its own
+`viewBox` asks for and scrolls sideways if it does not fit, because scaling a
+wide flowchart down to a text column makes its labels unreadable.
+
+A sequence diagram, to show it is not only flowcharts:
+
+[mermaid]
+----
+sequenceDiagram
+    participant B as Browser
+    participant S as adocers serve
+    participant F as File system
+    B->>S: GET /guide.adoc
+    S->>F: read guide.adoc and its includes
+    S-->>B: rendered HTML
+    B->>S: GET /__adocers/reload?generation=4
+    Note over S: held open until something changes
+    F-->>S: guide.adoc written
+    S-->>B: 5
+    B->>B: location.reload()
+----
+
+[#tables]
+== Tables
+
+A table's columns are described by `cols`, and `options` says which rows are
+special.
+
+[source,asciidoc]
+------
+[cols="1,2,1",options="header,footer",stripes=even]
+|===
+|Name |Description |Count
+|Alpha |The first entry |1
+|===
+------
+
+.A table with a header and a footer
+[cols="1,2,1",options="header,footer",stripes=even]
+|===
+|Name |Description |Count
+
+|Alpha
+|The first entry
+|1
+
+|Beta
+|The second entry
+|2
+
+|Total | |3
+|===
+
+Cells carry a specifier before the `|`. `^` `>` `<` align the content, `2+`
+spans two columns, `.2+` spans two rows, and a letter picks the cell style:
+`e` emphasis, `s` strong, `m` monospace, `l` literal, `h` header.
+
+.Alignment, spans and cell styles
+[cols="1,1,1",frame=ends,grid=rows]
+|===
+^|centred >|right <|left
+
+2+|this cell spans two columns |ordinary
+
+.2+|and this spans two rows e|emphasis s|strong
+m|monospace l|literal
+|===
+
+An `a` cell is a document in its own right:
+
+.An AsciiDoc cell
+[cols="1,1"]
+|===
+|Plain |AsciiDoc
+
+|Just text.
+a|
+* A list
+* inside a cell
+
+NOTE: And an admonition.
+|===
+
+`[%autowidth]` sizes a table to its content instead of the page:
+
+[%autowidth]
+|===
+|Flag |Effect
+
+|`--fragment` |Body only
+|`--watch` |Re-render on change
+|===
+
+== Images and media
+
+An image with a title is captioned and numbered as a figure.
+
+.How a document becomes a page
+image::showcase-figure.svg[The pipeline from source to page,660,96]
+
+An image's `link` attribute makes the figure itself a link, and `alt` text is
+derived from the file name when you do not give any.
+
+Video and audio have their own macros. They are shown here as source rather
+than rendered, because this repository carries no media file to point them at:
+
+[source,asciidoc]
+----
+video::clip.mp4[width=640,poster=thumb.png]
+audio::interview.ogg[]
+----
+
+== Includes
+
+An `include::` directive pulls another file in at the point it appears. What
+follows this paragraph comes from `showcase-included.adoc`:
+
+include::showcase-included.adoc[]
+
+Includes are resolved relative to the file that contains the directive, and
+`--safe-mode safe` or stricter confines them to the document's own directory.
+`lines`, `tags`, `leveloffset` and `indent` all work, and the files an include
+brings in are tracked, so `--watch` and `serve` notice when one of them changes.
+
+== Diagnostics
+
+Parsing AsciiDoc never fails — every UTF-8 string is a valid document — so
+everything the parser has to say arrives as a warning against a span of the
+source:
+
+....
+[UnterminatedDelimitedBlock] Warning: closing marker for delimited block not found
+    ╭─[ showcase.adoc:214:1 ]
+    │
+214 │ ----
+    │ ──┬─
+    │   ╰─── closing marker for delimited block not found
+────╯
+....
+
+Warnings never stop a render; the HTML is written regardless. `--deny-warnings`
+makes them fail the run instead, and `-v` adds the low-severity diagnostics that
+are hidden by default.
+
+Spans are measured against the document *after* `include::` expansion, which is
+what the parser measured, so the underline always lands on the right bytes. When
+a warning comes from an included file, a note names the file and line it really
+came from.
+
+[appendix]
+== The command line
+
+`adocers` renders files, and `adocers serve` shows a directory in a browser.
+
+[source,console]
+----
+adocers doc.adoc                 # writes doc.html beside it
+adocers -o build/ *.adoc         # writes build/<name>.html
+adocers -o - doc.adoc            # writes to standard output
+adocers --watch docs/*.adoc      # re-renders on change
+adocers serve ./docs             # http://127.0.0.1:8080/
+----
+
+[cols="1,2"]
+|===
+|Flag |Effect
+
+|`--fragment`
+|Body only — no page, no header or footer — for embedding elsewhere.
+
+|`--css FILE` / `--no-css`
+|Replace the built-in stylesheet, or leave the page unstyled.
+
+|`-a NAME=VALUE`
+|Set a document attribute the document cannot override. Repeatable.
+
+|`--no-icons`
+|Mark admonitions with their label rather than an icon.
+
+|`--mermaid-url URL` / `--no-mermaid`
+|Draw diagrams from a copy you host, or leave them as listing blocks.
+
+|`--safe-mode MODE`
+|`unsafe` (default), `safe`, `server` or `secure`.
+
+|`--deny-warnings`
+|Exit non-zero if anything was reported.
+|===
+
+[appendix]
+== Serving a directory
+
+`serve` renders each document when it is requested. Nothing is built ahead of
+time and nothing is left behind.
+
+A request for a directory is answered with the first `--index-file` present in
+it — `INDEX.adoc`, then `README.adoc` — and otherwise with a browsable listing.
+Adding `raw` to the query serves a document's source instead of its rendering,
+so a page and the AsciiDoc behind it are one query parameter apart:
+
+[source,console]
+----
+http://localhost:8080/showcase.adoc        # this page
+http://localhost:8080/showcase.adoc?raw    # the AsciiDoc behind it
+----
+
+Every page carries a script that reloads it when anything under the served
+directory changes. The page holds the value of a counter and asks the server for
+the current one; the server does not answer until the two differ. So a change
+reaches the browser as soon as the file system reports it, with no polling in
+between.

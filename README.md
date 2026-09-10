@@ -16,6 +16,18 @@ adocers render [OPTIONS] <FILE>...
 adocers serve [OPTIONS] [DIR]
 ```
 
+## Showcase
+
+`resources/showcase.adoc` is a single page through every feature, written the way
+Asciidoctor's Writer's Guide is written: each feature explained, the AsciiDoc
+that produces it shown, and the result directly underneath. Rendering it is the
+quickest way to see whether a change broke anything.
+
+```
+adocers resources/showcase.adoc     # writes resources/showcase.html
+adocers serve resources             # or read it in a browser
+```
+
 ## render
 
 Each input is rendered to a sibling `.html` file:

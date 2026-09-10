@@ -1,0 +1,9 @@
+This paragraph lives in `showcase-included.adoc` and was pulled in by an
+`include::` directive. The `--watch` flag and the `serve` subcommand both track
+files reached this way, so editing this file re-renders the document that
+includes it.
+
+// tag::fragment[]
+This sentence is wrapped in a `tag::fragment[]` region, so a document can
+include it on its own with `include::showcase-included.adoc[tag=fragment]`.
+// end::fragment[]
