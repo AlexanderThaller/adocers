@@ -141,6 +141,37 @@ run it through a sanitizer such as `ammonia` first. Safe mode does not cover
 this: it governs how far a document may reach outside itself, not what it may
 put on the page.
 
+=== Punctuation and escaping
+
+AsciiDoc curves the quotation marks you write as "`double`" and '`single`', and
+turns Sam's apostrophe the right way round. It also spells out the marks that
+are awkward to type: (C) (R) (TM), an em dash --, an ellipsis ..., and the
+arrows -> => <- <=.
+
+A backslash turns any of it off. \*not bold*, \_not italic_, \`not monospace`
+and \{not-an-attribute} all reach the page as written.
+
+The `pass:[pass:]` macro is finer-grained than a passthrough: it names which
+substitutions to run and skips the rest. pass:[<u>Nothing at all</u>] passes
+straight through, pass:q[<u>while *this* keeps its quotes</u>], and a block can
+ask for one back with `+[subs=+attributes]+`.
+
+A line ends with a space and a `+` to break without ending the paragraph +
+like that. `[%hardbreaks]` does it for every line of a block at once:
+
+[%hardbreaks]
+One line
+another line
+a third.
+
+=== Anchors and inline images
+
+[[an-anchor]]Any paragraph can carry an anchor, which is what `<<an-anchor,a
+cross reference>>` points at.
+
+An icon or a mark can sit in a line of text — image:showcase-figure.svg[A
+figure,120,18] — with the same attributes a block image takes.
+
 === Links, references and footnotes
 
 A bare URL such as https://asciidoc.org becomes a link, and
@@ -167,26 +198,23 @@ what you asked for.
 
 === Unordered
 
-[source,asciidoc]
-----
-* first level
-** second level
-*** third level
-+
-A block attached with a `+` continuation.
-----
-
 * first level
 ** second level
 *** third level
 +
 A block attached with a `+` continuation.
 
-The bullet is chosen with a block style:
+A style names the bullet, or takes it away:
 
 [square]
-* `[square]`
-* changes the marker
+* `[square]`, `[circle]` and `[disc]` name a bullet
+* `[none]` and `[no-bullet]` take it away
+* `[unstyled]` takes the indent too
+
+[inline]
+* `[inline]`
+* runs the items
+* along one line
 
 === Checklists
 
@@ -198,6 +226,7 @@ The bullet is chosen with a block style:
 
 * [x] finished
 * [ ] not finished
+* an item with no box is an ordinary item that happens to share the list
 
 === Ordered
 
@@ -211,11 +240,23 @@ upper roman.
 .... upper alpha
 ..... upper roman
 
+A style overrules the depth, which is the only way to reach `[decimal]` and
+`[lowergreek]` at all:
+
+[lowergreek]
+. lower greek
+. numbering
+
 `[start=N]` begins somewhere other than one, and `[%reversed]` counts down.
 
 [start=7]
 . seven
 . eight
+
+[%reversed]
+. three
+. two
+. one
 
 === Description lists
 
@@ -226,9 +267,15 @@ Another term:: Its own definition, which can carry
 An attached block, if the definition needs one.
 --
 
-`[horizontal]` sets the terms beside their definitions:
+Terms written one after another share the definition below them:
 
-[horizontal]
+First spelling::
+Second spelling:: Both mean this.
+
+`[horizontal]` sets the terms beside their definitions, and `labelwidth` and
+`itemwidth` fix the two columns:
+
+[horizontal,labelwidth=20,itemwidth=50]
 CPU:: Central processing unit
 RAM:: Random access memory
 NIC:: Network interface controller
