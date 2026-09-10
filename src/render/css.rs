@@ -203,6 +203,16 @@ ul, ol { padding-left: 1.5rem; }
 .ulist, .olist, .dlist, .colist, .qlist { margin-bottom: 1.25rem; }
 .ulist li p, .olist li p, .dlist dd p { margin-bottom: 0.35rem; }
 .checklist { list-style: none; padding-left: 0.5rem; }
+/* The bullet styles an author can ask for by name. `unstyled` and `no-bullet`
+   differ in whether the text keeps its indent; `inline` runs the items along
+   one line, which suits a row of links under a heading. */
+ul.square { list-style-type: square; }
+ul.circle { list-style-type: circle; }
+ul.disc { list-style-type: disc; }
+ul.none, ul.no-bullet { list-style: none; }
+ul.unstyled { list-style: none; padding-left: 0; }
+ul.inline { list-style: none; padding-left: 0; display: flex; flex-wrap: wrap; gap: 0 1rem; }
+ul.inline > li > p { margin: 0; }
 dt.hdlist1 { font-weight: 600; margin-top: 0.75rem; }
 dd { margin-left: 1.5rem; }
 .hdlist table { border-collapse: collapse; }

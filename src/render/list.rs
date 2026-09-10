@@ -38,10 +38,11 @@ impl<'src> Renderer<'src> {
         } else if list.is_bibliography() {
             Some("bibliography")
         } else {
-            // `[square]`, `[circle]`, `[disc]` and `[none]` select a bullet.
-            block
-                .declared_style()
-                .filter(|style| matches!(*style, "square" | "circle" | "disc" | "none"))
+            // Whatever style the author declared becomes a class. `[square]`,
+            // `[circle]`, `[disc]` and `[none]` select a bullet; `[unstyled]`,
+            // `[no-bullet]` and `[inline]` change the layout; anything else is
+            // a name a stylesheet may know.
+            block.declared_style()
         };
 
         let wrapper = block::wrapper_classes(block, &["ulist", variant.unwrap_or_default()]);
