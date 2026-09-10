@@ -28,16 +28,6 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // The `toc::[]` macro ignores its own attributes — its id, its role, its
-    // title and its levels — `#toctitle` is missing a class, and
-    // `:toc: preamble` closes a div too early.
-    "preamble__toc-placement-preamble",
-    "toc__doc-without-sections",
-    "toc__in-preamble",
-    "toc__in-section",
-    "toc__with-id-and-role",
-    "toc__with-levels",
-    "toc__with-title",
     // `:sectanchors:` and `:sectlinks:` are not read at all.
     "section__sectanchors",
     "section__sectanchors-and-sectlinks",

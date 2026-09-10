@@ -396,13 +396,7 @@ impl Renderer<'_> {
         let toc_mode = self.document.toc_mode();
 
         for block in self.document.child_blocks() {
-            let is_preamble = matches!(block, asciidoc_parser::blocks::Block::Preamble(_));
-
             self.block(block);
-
-            if is_preamble && toc_mode == TocMode::Preamble {
-                self.toc();
-            }
         }
 
         if matches!(toc_mode, TocMode::Bottom) {

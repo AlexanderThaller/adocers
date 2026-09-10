@@ -53,7 +53,7 @@ impl<'src> Renderer<'src> {
             Block::Table(table) => self.table_block(block, table),
             Block::Preamble(preamble) => self.preamble_block(preamble),
             Block::Break(r#break) => self.break_block(r#break),
-            Block::Toc(_) => self.toc_macro(),
+            Block::Toc(toc) => self.toc_macro(toc),
 
             // A list item never appears on its own: its list renders it, along
             // with the marker that gives it meaning.
@@ -345,6 +345,14 @@ impl<'src> Renderer<'src> {
         self.out.open("div", None, &["sectionbody"]);
         self.blocks(preamble.child_blocks());
         self.out.close("div");
+
+        // `:toc: preamble` places the outline below the preamble's body but
+        // still inside it: the preamble introduces the document, and the
+        // outline is the last thing that introduction says.
+        if self.document.toc_mode() == asciidoc_parser::document::TocMode::Preamble {
+            self.toc();
+        }
+
         self.out.close("div");
     }
 

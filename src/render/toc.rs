@@ -4,12 +4,19 @@
 //! reference catalog, because the tree is what carries nesting, ordering and
 //! the section numbers that appear in the entries.
 
-use asciidoc_parser::blocks::{
-    Block,
-    FindBlocks,
-    IsBlock,
-    SectionBlock,
-    SectionType,
+use asciidoc_parser::{
+    attributes::{
+        Attrlist,
+        ElementAttribute,
+    },
+    blocks::{
+        Block,
+        FindBlocks,
+        IsBlock,
+        SectionBlock,
+        SectionType,
+        TocBlock,
+    },
 };
 
 use crate::render::{
@@ -30,40 +37,109 @@ struct Entry {
     children: Vec<Entry>,
 }
 
+/// What a `toc::[]` macro asked for, where it differs from the document.
+///
+/// Everything here is `None` for the outline a document places by attribute;
+/// only the macro form can be told to differ.
+#[derive(Default)]
+struct Overrides<'src> {
+    /// The id of the container, and the stem of the title's id.
+    id: Option<&'src str>,
+
+    /// The class on the container, which stands in place of `toc` rather than
+    /// joining it.
+    class: Option<&'src str>,
+
+    /// The heading above the outline.
+    title: Option<&'src str>,
+
+    /// How deep the outline goes.
+    levels: Option<usize>,
+
+    /// Whether the heading carries the `title` class. Asciidoctor's macro
+    /// template writes it and its document template does not.
+    title_class: bool,
+}
+
+impl<'src> Overrides<'src> {
+    /// Read what the macro's own attribute list asked for.
+    fn from_macro(attrlist: &'src Attrlist<'src>) -> Self {
+        let named = |name: &str| {
+            attrlist
+                .named_attribute(name)
+                .map(ElementAttribute::value)
+                .filter(|value| !value.is_empty())
+        };
+
+        Self {
+            id: named("id"),
+            class: named("role"),
+            title: named("title"),
+            levels: named("levels").and_then(|levels| levels.parse().ok()),
+            title_class: true,
+        }
+    }
+}
+
 impl Renderer<'_> {
     /// Render the `#toc` container, if the document has any sections to list.
     pub(super) fn toc(&mut self) {
-        let depth = self.document.toc_levels();
+        self.toc_with(&Overrides::default());
+    }
+
+    /// Render the outline, and say whether there turned out to be one.
+    fn toc_with(&mut self, overrides: &Overrides<'_>) -> bool {
+        let depth = overrides
+            .levels
+            .unwrap_or_else(|| self.document.toc_levels());
         let entries = entries(self.document.child_blocks(), 1, depth);
 
         if entries.is_empty() {
-            return;
+            return false;
         }
 
-        let class = self.document.toc_class().to_string();
-        let title = self.document.toc_title().to_string();
+        let id = overrides.id.unwrap_or("toc");
+        let class = overrides
+            .class
+            .map_or_else(|| self.document.toc_class().to_string(), str::to_string);
+        let title = overrides
+            .title
+            .map_or_else(|| self.document.toc_title().to_string(), str::to_string);
 
-        self.out.open("div", Some("toc"), &[&class]);
-        self.out
-            .line(&format!("<div id=\"toctitle\">{title}</div>"));
+        let title_class = if overrides.title_class {
+            " class=\"title\""
+        } else {
+            ""
+        };
+
+        self.out.open("div", Some(id), &[&class]);
+        self.out.line(&format!(
+            "<div id=\"{}title\"{title_class}>{title}</div>",
+            escape_attr(id)
+        ));
         self.render_entries(&entries, 1);
         self.out.close("div");
+
+        true
     }
 
     /// Render a `toc::[]` macro.
     ///
     /// The macro only places the outline when the document asked for the macro
     /// placement, and only the first one does so — a second `toc::[]` would
-    /// otherwise repeat the entire outline.
-    pub(super) fn toc_macro(&mut self) {
-        if self.toc_rendered
-            || self.document.toc_mode() != asciidoc_parser::document::TocMode::Macro
-        {
-            return;
-        }
+    /// otherwise repeat the entire outline. A macro that places nothing still
+    /// leaves a note saying so, which is what Asciidoctor does and is a good
+    /// deal easier to debug than an empty space.
+    pub(super) fn toc_macro(&mut self, toc: &TocBlock<'_>) {
+        let placed = !self.toc_rendered
+            && self.document.toc_mode() == asciidoc_parser::document::TocMode::Macro
+            && self.toc_with(&Overrides::from_macro(toc.macro_attrlist()));
 
-        self.toc_rendered = true;
-        self.toc();
+        if placed {
+            self.toc_rendered = true;
+        } else {
+            self.out.line("<!-- toc disabled -->");
+        }
     }
 
     /// Emit one `<ul class="sectlevelN">` and everything under it.
