@@ -28,10 +28,6 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // `:sectanchors:` and `:sectlinks:` are not read at all.
-    "section__sectanchors",
-    "section__sectanchors-and-sectlinks",
-    "section__sectlinks",
     // Not this crate's to fix: a role on curly-quote quoting — `[why]"`text`"`
     // — should become a `<span>`, but inline content is rendered by
     // `asciidoc-parser` and it returns the text without one. `[.role]#text#`

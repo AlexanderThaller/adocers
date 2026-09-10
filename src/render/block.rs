@@ -1,5 +1,7 @@
 //! Block-level rendering: the dispatch from a parsed [`Block`] to its markup.
 
+use std::fmt::Write as _;
+
 use asciidoc_parser::{
     blocks::{
         AdmonitionBlock,
@@ -206,6 +208,40 @@ impl<'src> Renderer<'src> {
         self.out.close("div");
     }
 
+    /// The heading text, with whatever `:sectanchors:` and `:sectlinks:` ask to
+    /// be wrapped around it.
+    ///
+    /// An anchor is an empty link before the text, there for a stylesheet to
+    /// hang a mark on so a reader can grab the section's address. A section
+    /// link makes the text itself that link. Both need somewhere to point, so a
+    /// section without an id gets neither.
+    fn linked_title(&self, section: &'src SectionBlock<'src>, title: &str) -> String {
+        let anchors = self.document.is_attribute_set("sectanchors");
+        let links = self.document.is_attribute_set("sectlinks");
+
+        if !anchors && !links {
+            return title.to_string();
+        }
+
+        let Some(id) = section.id().map(escape_attr) else {
+            return title.to_string();
+        };
+
+        let mut out = String::new();
+
+        if anchors {
+            let _ = write!(out, "<a class=\"anchor\" href=\"#{id}\"></a>");
+        }
+
+        if links {
+            let _ = write!(out, "<a class=\"link\" href=\"#{id}\">{title}</a>");
+        } else {
+            out.push_str(title);
+        }
+
+        out
+    }
+
     /// Whether a stem block holds LaTeX rather than `AsciiMath`.
     ///
     /// `[latexmath]` and `[asciimath]` say so outright; a plain `[stem]` takes
@@ -310,6 +346,8 @@ impl<'src> Renderer<'src> {
             self.out.element(&heading, section.id(), &classes, &title);
             return;
         }
+
+        let title = self.linked_title(section, &title);
 
         if level == 0 {
             // A level-0 heading in the body is not a section wrapper of its own.

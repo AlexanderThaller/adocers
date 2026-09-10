@@ -91,6 +91,26 @@ h4 { font-size: 1.1rem; }
 h5, h6 { font-size: 1rem; }
 h1 .subtitle { color: var(--muted); font-weight: 400; }
 
+/* `:sectanchors:` puts an empty link before a heading, which needs a mark of
+   its own to be worth anything. It sits in the margin so the heading does not
+   move when it appears, and appears when the heading is under the pointer or
+   the link itself has the keyboard. */
+h1 .anchor, h2 .anchor, h3 .anchor, h4 .anchor, h5 .anchor, h6 .anchor {
+  position: absolute; margin-left: -1em; width: 1em;
+  opacity: 0; text-align: center; font-weight: 400; color: var(--muted);
+}
+h1 .anchor::before, h2 .anchor::before, h3 .anchor::before,
+h4 .anchor::before, h5 .anchor::before, h6 .anchor::before { content: "\00A7"; }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor,
+h4:hover .anchor, h5:hover .anchor, h6:hover .anchor,
+.anchor:focus { opacity: 1; }
+
+/* `:sectlinks:` makes the heading itself a link, which should still read as a
+   heading rather than as something to click. */
+h1 > .link, h2 > .link, h3 > .link, h4 > .link, h5 > .link, h6 > .link {
+  color: inherit; text-decoration: none;
+}
+
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
