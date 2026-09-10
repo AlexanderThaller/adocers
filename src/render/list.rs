@@ -168,8 +168,9 @@ impl<'src> Renderer<'src> {
 
         for item in list_items(list) {
             self.out.line("<tr>");
-            self.out
-                .line(&format!("<td class=\"hdlist1\">{}</td>", term_of(item)));
+            self.out.line("<td class=\"hdlist1\">");
+            self.out.line(term_of(item).as_str());
+            self.out.line("</td>");
             self.out.line("<td class=\"hdlist2\">");
             self.list_item(item, None);
             self.out.line("</td>");

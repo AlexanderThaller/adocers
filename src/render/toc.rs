@@ -75,20 +75,23 @@ impl Renderer<'_> {
         self.out.open("ul", None, &[&format!("sectlevel{level}")]);
 
         for entry in entries {
-            match &entry.id {
-                Some(id) => self.out.line(&format!(
-                    "<li><a href=\"#{}\">{}</a>",
-                    escape_attr(id),
-                    entry.title
-                )),
+            let item = match &entry.id {
+                Some(id) => format!("<li><a href=\"#{}\">{}</a>", escape_attr(id), entry.title),
 
                 // Without an id there is nothing to link to, but the section
                 // still belongs in the outline.
-                None => self.out.line(&format!("<li>{}", entry.title)),
-            }
+                None => format!("<li>{}", entry.title),
+            };
 
-            self.render_entries(&entry.children, level + 1);
-            self.out.line("</li>");
+            // An entry with nothing under it closes on its own line; one with
+            // subsections closes after the list of them.
+            if entry.children.is_empty() {
+                self.out.line(&format!("{item}</li>"));
+            } else {
+                self.out.line(&item);
+                self.render_entries(&entry.children, level + 1);
+                self.out.line("</li>");
+            }
         }
 
         self.out.close("ul");

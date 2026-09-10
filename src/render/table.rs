@@ -110,15 +110,38 @@ impl<'src> Renderer<'src> {
         // the content itself.
         let total: usize = columns.iter().map(TableColumn::width).sum();
 
-        for column in columns {
-            if table.is_autowidth() || total == 0 || column.is_autowidth() {
-                self.out.line("<col>");
-            } else {
-                let percent = percentage(column.width(), total);
-                self.out.line(&format!(
-                    "<col style=\"width: {}%;\">",
-                    trim_percent(percent)
-                ));
+        // A single `~` column stops the row being a proportion of anything: the
+        // measured columns then stand for the percentage they were written as,
+        // and the rest is the browser's to divide.
+        let mixed = columns.iter().any(TableColumn::is_autowidth);
+
+        let mut shares: Vec<Option<u64>> = columns
+            .iter()
+            .map(|column| {
+                if table.is_autowidth() || total == 0 || column.is_autowidth() {
+                    None
+                } else if mixed {
+                    Some(percentage(column.width(), 100))
+                } else {
+                    Some(percentage(column.width(), total))
+                }
+            })
+            .collect();
+
+        // Rounding each share on its own leaves the row a hair short of, or
+        // over, the full width. The last measured column absorbs the
+        // difference, so the widths always add up to exactly 100% — which is
+        // only meaningful when every column was measured.
+        if !mixed {
+            balance(&mut shares);
+        }
+
+        for share in shares {
+            match share {
+                None => self.out.line("<col>"),
+                Some(share) => self
+                    .out
+                    .line(&format!("<col style=\"width: {}%;\">", trim_percent(share))),
             }
         }
 
@@ -178,6 +201,13 @@ impl<'src> Renderer<'src> {
             TableCellContent::Simple(content) => {
                 let rendered = content.rendered_html();
 
+                // An empty cell stays empty rather than holding an empty
+                // paragraph. A literal one is the exception: its `<pre>` is a
+                // visible box, and the row would jump without it.
+                if rendered.is_empty() && cell.style() != ColumnStyle::Literal {
+                    return;
+                }
+
                 // A header cell is already emphasized by its element, so it
                 // carries the text directly rather than wrapping it.
                 if header {
@@ -216,12 +246,14 @@ impl<'src> Renderer<'src> {
             }
 
             // An AsciiDoc cell is a document in its own right; its blocks
-            // render exactly as they would at the top level.
+            // render exactly as they would at the top level. The wrapper hugs
+            // them, opening on the `<td>`'s line and closing on the last
+            // block's, so the cell reads as one run of markup.
             TableCellContent::AsciiDoc(nested) => {
-                self.out.newline();
-                self.out.open("div", None, &["content"]);
+                self.out.raw("<div class=\"content\">");
                 self.blocks(nested.blocks().iter());
-                self.out.close("div");
+                self.out.unline();
+                self.out.raw("</div>");
             }
         }
     }
@@ -290,21 +322,45 @@ fn valign(cell: VerticalAlignment, column: Option<&TableColumn>) -> &'static str
     }
 }
 
-/// One column's share of the total column width, as a percentage.
-///
-/// The widths come from a table's `cols` spec, so they are small integers that
-/// convert to `f64` exactly; a nonsensically large one saturates rather than
-/// silently losing precision.
-fn percentage(width: usize, total: usize) -> f64 {
-    let width = u32::try_from(width).unwrap_or(u32::MAX);
-    let total = u32::try_from(total).unwrap_or(u32::MAX);
+/// A full column width: 100%, counted in the ten-thousandths of a percent that
+/// [`percentage`] works in.
+const FULL: u64 = 100 * 10_000;
 
-    f64::from(width) * 100.0 / f64::from(total)
+/// One column's share of the total column width, in ten-thousandths of a
+/// percent, rounded to nearest.
+///
+/// Percentages are carried as integers rather than floats so that a row of them
+/// can be summed and [`balance`]d without rounding error creeping in.
+fn percentage(width: usize, total: usize) -> u64 {
+    let width = u64::try_from(width).unwrap_or(u64::MAX);
+    let total = u64::try_from(total).unwrap_or(u64::MAX);
+
+    if total == 0 {
+        return 0;
+    }
+
+    // Saturating, because a nonsensically wide column should pin to the full
+    // width rather than wrap around.
+    let scaled = width.saturating_mul(FULL);
+
+    (scaled + total / 2) / total
+}
+
+/// Give the last measured column whatever the others' rounding left over, so
+/// that the shares total exactly [`FULL`].
+fn balance(shares: &mut [Option<u64>]) {
+    let total: u64 = shares.iter().flatten().sum();
+
+    let Some(last) = shares.iter_mut().flatten().next_back() else {
+        return;
+    };
+
+    *last = last.saturating_add(FULL).saturating_sub(total);
 }
 
 /// Format a column width, dropping the trailing zeros a fixed precision leaves.
-fn trim_percent(percent: f64) -> String {
-    let formatted = format!("{percent:.4}");
+fn trim_percent(share: u64) -> String {
+    let formatted = format!("{}.{:04}", share / 10_000, share % 10_000);
     let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
 
     trimmed.to_string()

@@ -70,6 +70,14 @@ impl Buffer {
         self.out.push('\n');
     }
 
+    /// Drop a trailing newline, so that what comes next continues the line the
+    /// buffer already ended.
+    pub fn unline(&mut self) {
+        if self.out.ends_with('\n') {
+            self.out.pop();
+        }
+    }
+
     /// Append a newline unless the buffer already ends with one.
     pub fn newline(&mut self) {
         if !self.out.is_empty() && !self.out.ends_with('\n') {
@@ -109,6 +117,13 @@ impl Buffer {
 
 /// Build an opening tag with an optional id and class list.
 fn open_tag(tag: &str, id: Option<&str>, classes: &[&str]) -> String {
+    open_tag_with(tag, id, classes, "")
+}
+
+/// Build an opening tag that carries `extra` — already-formed markup for the
+/// attributes an id and a class list cannot express, such as a bare boolean —
+/// after the ones it shares with [`open_tag`].
+pub(super) fn open_tag_with(tag: &str, id: Option<&str>, classes: &[&str], extra: &str) -> String {
     let mut out = format!("<{tag}");
 
     if let Some(id) = id {
@@ -120,6 +135,7 @@ fn open_tag(tag: &str, id: Option<&str>, classes: &[&str]) -> String {
         let _ = write!(out, " class=\"{}\"", escape_attr(&classes.join(" ")));
     }
 
+    out.push_str(extra);
     out.push('>');
     out
 }

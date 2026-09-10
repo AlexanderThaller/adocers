@@ -28,6 +28,7 @@ use crate::render::{
     html::{
         escape_attr,
         escape_text,
+        open_tag_with,
     },
     icons,
 };
@@ -453,23 +454,24 @@ impl<'src> Renderer<'src> {
                 // `%collapsible` turns an example into a disclosure widget, and
                 // its title becomes the summary rather than a heading above it.
                 if block.has_option("collapsible") {
-                    self.open_wrapper(block, "exampleblock");
-
+                    // The `<details>` stands on its own: no `exampleblock`
+                    // wrapper, so the block's id and roles land on it directly.
                     let open = if block.has_option("open") {
                         " open"
                     } else {
                         ""
                     };
                     let summary = block.title().unwrap_or("Details");
+                    let roles = block.roles();
 
-                    self.out.line(&format!("<details{open}>"));
+                    self.out
+                        .line(&open_tag_with("details", block.id(), &roles, open));
                     self.out
                         .line(&format!("<summary class=\"title\">{summary}</summary>"));
                     self.out.open("div", None, &["content"]);
                     self.blocks(compound.child_blocks());
                     self.out.close("div");
                     self.out.line("</details>");
-                    self.out.close("div");
                     return;
                 }
 

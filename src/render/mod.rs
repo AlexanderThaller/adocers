@@ -5,6 +5,34 @@
 //! page is the back end's job, and this module is that back end. The markup it
 //! emits follows Asciidoctor's HTML5 converter (the same wrapper `div`s and
 //! class names), so stylesheets written for Asciidoctor apply unchanged.
+//!
+//! # A back end we could adopt instead
+//!
+//! [`asciidoc-html5`](https://github.com/asciidoc-rs/asciidoc-html5) is the
+//! parser author's own HTML5 back end, and it covers what this module covers:
+//! rendered against `resources/showcase.adoc` the two agree on every wrapper
+//! and class name, and on constructs the showcase leaves out — video, audio,
+//! bibliographies, roles, hard breaks, passthroughs — they agree byte for byte.
+//! Both are bounded by the same parser, so neither is ahead on coverage.
+//!
+//! Adopting it would mean giving up what this module does *beyond* Asciidoctor,
+//! with no supported way to add it back:
+//!
+//! - source blocks highlighted here rather than in the browser, which that
+//!   crate rules out ("client-side syntax highlighters only");
+//! - mermaid blocks turned into diagrams, which it renders as listings;
+//! - admonitions marked with an icon rather than a label;
+//! - the labelled document header ([`Renderer::details`]).
+//!
+//! Its README also rules out an extension mechanism before 1.0, so hooking
+//! those back in would mean rewriting its output rather than configuring it.
+//!
+//! It is worth revisiting if that changes — or if the long tail of Asciidoctor
+//! fidelity becomes more work than it is worth. Until then it is useful as an
+//! oracle: `asciidoctor` itself is the better one, and the fidelity fixes it
+//! turned up (the column widths that add up to exactly 100%, the footer's
+//! version line, the `<details>` that carries its own id) came from diffing
+//! against it.
 
 mod block;
 mod callout;
@@ -400,8 +428,11 @@ impl Renderer<'_> {
         for footnote in footnotes {
             let index = escape_attr(&footnote.index);
 
-            self.out
-                .open("div", Some(&format!("_footnotedef_{index}")), &["footnote"]);
+            // Written out rather than opened, because Asciidoctor puts the
+            // class before the id here and nowhere else.
+            self.out.line(&format!(
+                "<div class=\"footnote\" id=\"_footnotedef_{index}\">"
+            ));
             self.out.line(&format!(
                 "<a href=\"#_footnoteref_{index}\">{}</a>. {}",
                 escape_text(&footnote.index),
@@ -413,28 +444,43 @@ impl Renderer<'_> {
         self.out.close("div");
     }
 
-    /// Render `#footer`, which carries the `last-updated-label` line when the
-    /// document has a modification date to show.
+    /// Render `#footer`: the document's revision, then the date it was last
+    /// modified, each on a line of its own.
+    ///
+    /// A document with neither has no footer at all.
     fn footer(&mut self) {
         if self.document.is_attribute_set("nofooter") {
             return;
         }
 
-        let Some(date) = self
+        let mut lines: Vec<String> = Vec::new();
+
+        if let Some(number) = self.attribute("revnumber") {
+            let label = self
+                .attribute("version-label")
+                .unwrap_or_else(|| "Version".to_string());
+
+            lines.push(format!("{} {}", escape_text(&label), escape_text(&number)));
+        }
+
+        if let Some(date) = self
             .attribute("docdatetime")
             .or_else(|| self.attribute("localdatetime"))
-        else {
-            return;
-        };
+        {
+            let label = self
+                .attribute("last-update-label")
+                .unwrap_or_else(|| "Last updated".to_string());
 
-        let label = self
-            .attribute("last-update-label")
-            .unwrap_or_else(|| "Last updated".to_string());
+            lines.push(format!("{} {}", escape_text(&label), escape_text(&date)));
+        }
+
+        if lines.is_empty() {
+            return;
+        }
 
         self.out.open("div", Some("footer"), &[]);
         self.out.open("div", Some("footer-text"), &[]);
-        self.out
-            .line(&format!("{} {}", escape_text(&label), escape_text(&date)));
+        self.out.line(&lines.join("<br>\n"));
         self.out.close("div");
         self.out.close("div");
     }

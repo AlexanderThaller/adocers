@@ -85,7 +85,16 @@ pub fn highlight(language: &str, source: &str) -> Option<String> {
         .ok()?;
 
     // The renderer escapes the source as it goes, so what comes back is markup.
-    Some(renderer.lines().collect())
+    let mut html: String = renderer.lines().collect();
+
+    // Every line comes back newline-terminated, the last one included. Left on,
+    // that newline is a blank line inside the `<pre>` that the same block shows
+    // without when it is not highlighted.
+    if html.ends_with('\n') {
+        html.pop();
+    }
+
+    Some(html)
 }
 
 /// The name a language is registered under, resolving the aliases in common
@@ -297,6 +306,16 @@ mod tests {
         assert!(html.contains("hl-keyword"), "no keyword span: {html}");
         assert!(html.contains("hl-string"), "no string span: {html}");
         assert!(html.contains("main"));
+    }
+
+    #[test]
+    fn does_not_trail_a_newline() {
+        let html = highlight("rust", "fn main() {}").unwrap_or_default();
+
+        assert!(
+            !html.ends_with('\n'),
+            "a trailing newline shows as a blank line in the block: {html:?}"
+        );
     }
 
     #[test]
