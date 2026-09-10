@@ -98,6 +98,11 @@ p { margin: 0 0 1rem; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
 
 .details { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+.details .detail { line-height: 1.5; }
+.details .label { font-weight: 600; }
+.details .email a { color: inherit; }
+/* The remark is a sentence about the revision, not another labelled value. */
+.details .remark { margin-top: 0.75rem; font-style: italic; }
 .title { font-style: italic; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.95rem; }
 
 /* Table of contents */

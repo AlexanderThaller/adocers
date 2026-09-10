@@ -25,6 +25,7 @@ use asciidoc_parser::{
     blocks::FindBlocks,
     document::{
         InterpretedValue,
+        RevisionLine,
         TocMode,
     },
 };
@@ -216,58 +217,111 @@ impl Renderer<'_> {
     }
 
     /// The author and revision lines shown under the document title.
+    ///
+    /// Each is a labelled line — `Author: …`, `Version: …` — rather than the
+    /// bare stack of values Asciidoctor emits, which leaves the reader to work
+    /// out what a lone date on its own line is meant to be. The ids and classes
+    /// are Asciidoctor's, so a stylesheet written for it still finds them.
     fn details(&self) -> String {
         let mut details = Buffer::new();
 
-        for (index, author) in self.document.authors().iter().enumerate() {
-            // Asciidoctor numbers every author after the first; the first is
-            // plain `author`/`email` so existing stylesheets keep working.
-            let suffix = if index == 0 {
-                String::new()
-            } else {
-                (index + 1).to_string()
-            };
-
-            details.line(&format!(
-                "<span id=\"author{suffix}\" class=\"author\">{}</span><br>",
-                escape_text(author.name())
-            ));
-
-            if let Some(email) = author.email() {
-                details.line(&format!(
-                    "<span id=\"email{suffix}\" class=\"email\"><a \
-                     href=\"mailto:{0}\">{1}</a></span><br>",
-                    escape_attr(email),
-                    escape_text(email)
-                ));
-            }
+        if let Some(line) = self.authors() {
+            details.raw(&line);
         }
 
         if let Some(revision) = self.document.header().revision_line() {
-            if let Some(number) = revision.revnumber() {
-                details.line(&format!(
-                    "<span id=\"revnumber\">version {},</span>",
-                    escape_text(number)
-                ));
+            if let Some(line) = Self::revision(revision) {
+                details.raw(&line);
             }
 
-            let date = revision.revdate();
-            if !date.is_empty() {
-                details.line(&format!(
-                    "<span id=\"revdate\">{}</span>",
-                    escape_text(date)
-                ));
-            }
-
+            // The remark describes the revision rather than naming part of it,
+            // so it reads as its own sentence, set apart from the labels above.
             if let Some(remark) = revision.revremark() {
                 details.line(&format!(
-                    "<br><span id=\"revremark\">{}</span>",
+                    "<div class=\"remark\"><span id=\"revremark\">{}</span></div>",
                     escape_text(remark)
                 ));
             }
         }
 
         details.finish()
+    }
+
+    /// The `Author:` line, or `None` when the document names nobody.
+    fn authors(&self) -> Option<String> {
+        let authors = self.document.authors();
+
+        if authors.is_empty() {
+            return None;
+        }
+
+        let written: Vec<String> = authors
+            .iter()
+            .enumerate()
+            .map(|(index, author)| {
+                // Asciidoctor numbers every author after the first; the first is
+                // plain `author`/`email` so existing stylesheets keep working.
+                let suffix = if index == 0 {
+                    String::new()
+                } else {
+                    (index + 1).to_string()
+                };
+
+                let name = format!(
+                    "<span id=\"author{suffix}\" class=\"author\">{}</span>",
+                    escape_text(author.name())
+                );
+
+                // The angle brackets are the convention every reader already
+                // knows from a commit or a mail header.
+                match author.email() {
+                    Some(email) => format!(
+                        "{name} <span id=\"email{suffix}\" class=\"email\">&lt;<a \
+                         href=\"mailto:{}\">{}</a>&gt;</span>",
+                        escape_attr(email),
+                        escape_text(email)
+                    ),
+
+                    None => name,
+                }
+            })
+            .collect();
+
+        let label = if written.len() == 1 {
+            "Author"
+        } else {
+            "Authors"
+        };
+
+        Some(format!(
+            "<div class=\"detail\"><span class=\"label\">{label}:</span> {}</div>\n",
+            written.join(", ")
+        ))
+    }
+
+    /// The `Version:` line, or `None` when the revision line holds neither a
+    /// number nor a date.
+    fn revision(revision: &RevisionLine<'_>) -> Option<String> {
+        let number = revision
+            .revnumber()
+            .map(|number| format!("<span id=\"revnumber\">{}</span>", escape_text(number)));
+
+        let date = Some(revision.revdate())
+            .filter(|date| !date.is_empty())
+            .map(|date| format!("<span id=\"revdate\">{}</span>", escape_text(date)));
+
+        // A revision line may carry a date and no number at all, and calling a
+        // date a version would be a plain misdescription.
+        let (label, value) = match (number, date) {
+            (Some(number), Some(date)) => ("Version", format!("{number}, {date}")),
+            (Some(number), None) => ("Version", number),
+            (None, Some(date)) => ("Date", date),
+            (None, None) => return None,
+        };
+
+        Some(format!(
+            "<div class=\"detail\"><span class=\"label\">{label}:</span> {value}</div>\n"
+        ))
     }
 
     /// Render every top-level block, honouring the TOC placements that fall
