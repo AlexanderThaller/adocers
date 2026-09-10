@@ -35,6 +35,8 @@ adocers -o - doc.adoc       # writes to standard output
 | `--css <FILE>` | Embed this stylesheet instead of the built-in one. |
 | `--no-css` | Emit the page unstyled. |
 | `-a, --attribute <NAME[=VALUE]>` | Set a document attribute. `NAME`, `NAME=VALUE`, `NAME!` and `!NAME` all work, and the document cannot override them. Repeatable. |
+| `--mermaid-url <URL>` | Where the browser fetches mermaid from. Point it at a copy you host to work offline. |
+| `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
 | `-w, --watch` | Re-render on change; see below. |
 | `--deny-warnings` | Exit non-zero if any warning was reported. |
@@ -160,6 +162,53 @@ light/dark preference.
 `asciidoc-parser` renders inline content only; block and document assembly is
 this tool's own back end (`src/render/`). `render` and `serve` go through the
 same pipeline, so a document looks the same either way.
+
+### Mermaid diagrams
+
+A block written as `[mermaid]` or `[source,mermaid]` is rendered as a diagram:
+
+```
+[mermaid]
+----
+flowchart LR
+    A --> B
+----
+```
+
+Both spellings are recognized, because a document that has to render on GitHub
+*and* through Antora usually picks between them with an attribute:
+
+```
+ifdef::env-github[]
+:MERMAID: source, mermaid
+endif::[]
+ifndef::env-github[]
+:MERMAID: mermaid
+endif::[]
+
+[{MERMAID}]
+----
+flowchart LR
+    A --> B
+----
+```
+
+The diagram is drawn in the browser, not at build time. Rendering it here would
+mean shelling out to a headless browser the way `asciidoctor-diagram` does, and
+that puts a build dependency in the way of what is otherwise a self-contained
+binary. It also degrades honestly: a reader with no scripts sees the source of
+the diagram rather than a gap.
+
+The drawing module is fetched from a CDN, and only by a page that actually has a
+diagram on it. `--mermaid-url` points at a copy you host yourself, and
+`--no-mermaid` leaves diagrams as the listing blocks they were written as. A
+`--fragment` keeps the diagram markup but never the script — the page it is
+embedded in owns what it loads.
+
+Diagrams follow the reader's colour scheme, and are redrawn if it changes, since
+mermaid bakes the theme into the SVG it produces. A diagram is shown at the size
+its own `viewBox` asks for and scrolls sideways if it does not fit, because
+scaling a wide flowchart down to a text column makes its labels unreadable.
 
 ### Security
 

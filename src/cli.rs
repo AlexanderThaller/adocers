@@ -38,6 +38,10 @@ pub enum Command {
 }
 
 /// Options shared by every way of producing HTML.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these are command line flags, and one field per flag is what clap asks for"
+)]
 #[derive(Args, Clone, Debug)]
 pub struct CommonArgs {
     /// Embed this stylesheet in the page instead of the built-in one.
@@ -60,6 +64,17 @@ pub struct CommonArgs {
         global = true
     )]
     pub attributes: Vec<String>,
+
+    /// Where the browser fetches mermaid from to draw diagrams.
+    ///
+    /// Point this at a copy you host yourself to render pages that must work
+    /// without reaching the network.
+    #[arg(long, value_name = "URL", conflicts_with = "no_mermaid", global = true)]
+    pub mermaid_url: Option<String>,
+
+    /// Show mermaid diagrams as the listing blocks they were written as.
+    #[arg(long = "no-mermaid", global = true)]
+    pub no_mermaid: bool,
 
     /// How far a document may reach outside itself.
     #[arg(long, value_enum, default_value_t = SafeMode::Unsafe, value_name = "MODE", global = true)]

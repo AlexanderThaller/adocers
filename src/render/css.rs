@@ -118,6 +118,13 @@ dd { margin-left: 1.5rem; }
 img, video, audio { max-width: 100%; height: auto; }
 .imageblock .title { text-align: center; margin-top: 0.5rem; }
 
+/* Diagrams */
+.diagram > .content { text-align: center; overflow-x: auto; }
+pre.mermaid { background: none; padding: 0; margin: 0; text-align: center; line-height: normal; }
+pre.mermaid svg { display: inline-block; vertical-align: top; }
+/* Until the drawing module runs, the source is what there is to show. */
+pre.mermaid:not([data-processed]) { text-align: left; background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; }
+
 /* Tables */
 table.tableblock { border-collapse: collapse; margin: 1.5rem 0; font-size: 0.95rem; }
 table.tableblock.stretch { width: 100%; }

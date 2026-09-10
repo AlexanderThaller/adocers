@@ -8,6 +8,7 @@
 
 mod block;
 mod css;
+mod diagram;
 mod html;
 mod list;
 mod media;
@@ -45,6 +46,19 @@ pub struct Options {
     ///
     /// Ignored when [`fragment`](Self::fragment) is set, for the same reason.
     pub body_suffix: String,
+
+    /// Where the browser fetches mermaid from to draw diagrams, or `None` to
+    /// render a diagram as the listing block it was written as.
+    ///
+    /// A fragment still carries its diagrams' markup but never the script: the
+    /// page it is embedded in owns what it loads.
+    pub mermaid: Option<String>,
+}
+
+/// Where the browser fetches mermaid from when the caller names no other.
+#[must_use]
+pub fn default_mermaid_url() -> String {
+    diagram::DEFAULT_URL.to_string()
 }
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
@@ -53,12 +67,13 @@ pub fn default_stylesheet() -> String {
 }
 
 /// Render `document` to HTML.
-pub fn render<'src>(document: &'src Document<'src>, options: &Options) -> String {
+pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> String {
     let mut renderer = Renderer {
         document,
+        options,
         out: Buffer::new(),
-        fragment: options.fragment,
         toc_rendered: false,
+        diagrams: false,
     };
 
     let body = renderer.body();
@@ -66,7 +81,7 @@ pub fn render<'src>(document: &'src Document<'src>, options: &Options) -> String
     if options.fragment {
         body
     } else {
-        document_page(document, options, &body)
+        document_page(document, options, &body, renderer.diagrams)
     }
 }
 
@@ -75,17 +90,23 @@ struct Renderer<'src> {
     /// The document being rendered; consulted for attributes and TOC settings.
     document: &'src Document<'src>,
 
+    /// How the caller asked for the document to be rendered.
+    options: &'src Options,
+
     /// Markup accumulated so far.
     out: Buffer,
-
-    /// Whether the output is destined for embedding in another page.
-    fragment: bool,
 
     /// Whether a `toc::[]` macro has already emitted the table of contents.
     ///
     /// Asciidoctor renders the macro form at most once; a second `toc::[]` is
     /// ignored rather than duplicating the whole outline.
     toc_rendered: bool,
+
+    /// Whether the document turned out to contain a diagram.
+    ///
+    /// Only a page that has one loads the drawing module, so this is not known
+    /// until the body has been rendered.
+    diagrams: bool,
 }
 
 impl Renderer<'_> {
@@ -97,7 +118,7 @@ impl Renderer<'_> {
     /// standalone document rather than to a fragment of one. This matches what
     /// Asciidoctor emits with `--no-header-footer`.
     fn body(&mut self) -> String {
-        if self.fragment {
+        if self.options.fragment {
             // The document title is normally the host page's job, so it appears
             // only when the document asks for it with `:showtitle:`.
             if self.document.show_title(false) {
@@ -393,7 +414,7 @@ pub fn page(page: &Page<'_>, body: &str) -> String {
 }
 
 /// Wrap a rendered document's body in a page built from its own metadata.
-fn document_page(document: &Document<'_>, options: &Options, body: &str) -> String {
+fn document_page(document: &Document<'_>, options: &Options, body: &str, diagrams: bool) -> String {
     let lang = match document.attribute_value("lang") {
         InterpretedValue::Value(lang) => lang,
         _ => "en".to_string(),
@@ -410,6 +431,12 @@ fn document_page(document: &Document<'_>, options: &Options, body: &str) -> Stri
         .doctitle_sanitized()
         .unwrap_or_else(|| "Untitled".to_string());
 
+    // The drawing module is fetched only by a page that has something to draw.
+    let body_suffix = match options.mermaid.as_deref().filter(|_| diagrams) {
+        Some(url) => format!("{}\n{}", diagram::script(url), options.body_suffix),
+        None => options.body_suffix.clone(),
+    };
+
     page(
         &Page {
             lang: &lang,
@@ -417,7 +444,7 @@ fn document_page(document: &Document<'_>, options: &Options, body: &str) -> Stri
             description: description.as_deref(),
             body_classes: &body_classes(document),
             stylesheet: options.stylesheet.as_deref(),
-            body_suffix: &options.body_suffix,
+            body_suffix: body_suffix.trim_end(),
         },
         body,
     )

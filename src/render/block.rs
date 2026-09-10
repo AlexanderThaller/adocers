@@ -150,6 +150,11 @@ impl<'src> Renderer<'src> {
     /// `<div class="listingblock">`, with syntax-highlighting hooks when the
     /// block declares a source language.
     fn listing(&mut self, block: &'src Block<'src>, content: &str) {
+        if self.options.mermaid.is_some() && is_mermaid(block) {
+            self.mermaid_block(block, content);
+            return;
+        }
+
         self.open_wrapper(block, "listingblock");
         self.block_title(block);
         self.out.open("div", None, &["content"]);
@@ -172,11 +177,44 @@ impl<'src> Renderer<'src> {
 
     /// `<div class="literalblock">`.
     fn literal(&mut self, block: &'src Block<'src>, content: &str) {
+        if self.options.mermaid.is_some() && is_mermaid(block) {
+            self.mermaid_block(block, content);
+            return;
+        }
+
         self.open_wrapper(block, "literalblock");
         self.block_title(block);
         self.out.open("div", None, &["content"]);
         self.out.line(&format!("<pre>{content}</pre>"));
         self.out.close("div");
+        self.out.close("div");
+    }
+
+    /// A mermaid diagram, handed to the browser as its own source to draw.
+    ///
+    /// The wrapper carries `imageblock` so that a stylesheet written for
+    /// Asciidoctor centres the diagram and puts its caption underneath, the way
+    /// it would for a diagram that had been rendered to an image.
+    fn mermaid_block(&mut self, block: &'src Block<'src>, content: &str) {
+        self.diagrams = true;
+
+        let classes = wrapper_classes(block, "imageblock");
+        let mut classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+        classes.insert(1, "diagram");
+
+        self.out.open("div", block.id(), &classes);
+        self.out.open("div", None, &["content"]);
+
+        // `content` is already escaped, which is what mermaid needs: the
+        // browser turns `--&gt;` back into `-->` when the script reads the
+        // element's text, and an unescaped `<` would have ended the element.
+        self.out
+            .line(&format!("<pre class=\"mermaid\">{content}</pre>"));
+
+        self.out.close("div");
+
+        // A diagram's caption sits below it, as an image's does.
+        self.block_title(block);
         self.out.close("div");
     }
 
@@ -442,6 +480,21 @@ pub(super) fn section_prefix<'src>(section: &'src SectionBlock<'src>) -> String 
         Some(number) => format!("{number}. "),
         None => String::new(),
     }
+}
+
+/// Whether a block was written as a mermaid diagram.
+///
+/// Both spellings in circulation are recognized: `[mermaid]`, which Antora and
+/// `asciidoctor-diagram` use, and `[source,mermaid]`, which is what renders as
+/// a diagram on GitHub. A document that has to serve both usually picks between
+/// them with an attribute, so a renderer that took only one would show the
+/// other as a wall of arrows.
+fn is_mermaid<'src>(block: &'src Block<'src>) -> bool {
+    let declared = block
+        .declared_style()
+        .is_some_and(|style| style.to_lowercase() == "mermaid");
+
+    declared || source_language(block).is_some_and(|language| language.to_lowercase() == "mermaid")
 }
 
 /// The language a listing block declares, from `[source,rust]` or

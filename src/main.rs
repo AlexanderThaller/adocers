@@ -82,11 +82,14 @@ fn render(args: &RenderArgs) -> Result<ExitCode> {
 
 /// Decide how a rendered body should be wrapped and styled.
 pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
+    // A fragment keeps its diagrams' markup but never the script that draws
+    // them: the page it is embedded in owns what it loads.
     if fragment {
         return Ok(Options {
             fragment: true,
             stylesheet: None,
             body_suffix: String::new(),
+            mermaid: mermaid(common),
         });
     }
 
@@ -104,7 +107,22 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
         fragment: false,
         stylesheet,
         body_suffix: String::new(),
+        mermaid: mermaid(common),
     })
+}
+
+/// Where diagrams are drawn from, or `None` when they are not to be drawn.
+fn mermaid(common: &CommonArgs) -> Option<String> {
+    if common.no_mermaid {
+        return None;
+    }
+
+    Some(
+        common
+            .mermaid_url
+            .clone()
+            .unwrap_or_else(render::default_mermaid_url),
+    )
 }
 
 /// Configure diagnostic output for this run.
