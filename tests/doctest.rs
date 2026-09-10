@@ -28,25 +28,6 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // Waiting on the bare `[source]` fix below; its table markup is already
-    // right.
-    "table__insane-cells-formatting",
-    // `options="nowrap"` is not read, a bare `[source]` misses the `highlight`
-    // wrapper, STEM content is not delimited for MathJax, and `[abstract]`
-    // renders as a plain open block.
-    "inline_callout__basic",
-    "listing__basic-nowrap",
-    "listing__source",
-    "listing__source-nowrap",
-    "listing__source-with-title",
-    "literal__nowrap",
-    "open__abstract",
-    "open__abstract-with-id-and-role",
-    "open__abstract-with-title",
-    "stem__asciimath",
-    "stem__latexmath",
-    "stem__with-id-and-role",
-    "stem__with-title",
     // Lists: a plain item inside a checklist is given a glyph it should not
     // have, two numeration styles are unrecognized, and a horizontal list
     // ignores its column widths.

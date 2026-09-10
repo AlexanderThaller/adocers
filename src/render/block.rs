@@ -132,10 +132,18 @@ impl<'src> Renderer<'src> {
             "literal" => self.literal(block, content),
 
             "stem" => {
+                // MathJax is told where the mathematics starts and stops by
+                // these delimiters; without them the page shows the source.
+                let (open, close) = if self.stem_is_latex(block) {
+                    ("\\[", "\\]")
+                } else {
+                    ("\\$", "\\$")
+                };
+
                 self.open_wrapper(block, "stemblock");
                 self.block_title(block);
                 self.out.open("div", None, &["content"]);
-                self.out.line(content);
+                self.out.line(&format!("{open}{content}{close}"));
                 self.out.close("div");
                 self.out.close("div");
             }
@@ -170,24 +178,48 @@ impl<'src> Renderer<'src> {
         self.block_title(block);
         self.out.open("div", None, &["content"]);
 
-        match source_language(block) {
-            Some(language) => {
-                let body = self
-                    .highlighted(language, content)
-                    .unwrap_or_else(|| rendered.to_string());
-                let language = escape_attr(language);
+        // A `[source]` block is wrapped in `<code>` whether or not it named a
+        // language: the style alone is what says this is source.
+        if block.declared_style() == Some("source") {
+            let language = source_language(block);
 
-                self.out.line(&format!(
-                    "<pre class=\"highlight\"><code class=\"language-{language}\" \
-                     data-lang=\"{language}\">{body}</code></pre>"
-                ));
-            }
+            let body = language
+                .and_then(|language| self.highlighted(language, content))
+                .unwrap_or_else(|| rendered.to_string());
 
-            None => self.out.line(&format!("<pre>{rendered}</pre>")),
+            let language = language
+                .map(escape_attr)
+                .map_or_else(String::new, |language| {
+                    format!(" class=\"language-{language}\" data-lang=\"{language}\"")
+                });
+
+            self.out.line(&format!(
+                "<pre class=\"highlight{}\"><code{language}>{body}</code></pre>",
+                nowrap(block)
+            ));
+        } else {
+            self.out
+                .line(&format!("<pre{}>{rendered}</pre>", pre_class(block)));
         }
 
         self.out.close("div");
         self.out.close("div");
+    }
+
+    /// Whether a stem block holds LaTeX rather than `AsciiMath`.
+    ///
+    /// `[latexmath]` and `[asciimath]` say so outright; a plain `[stem]` takes
+    /// whatever `:stem:` was set to, which is `AsciiMath` unless it says
+    /// otherwise.
+    fn stem_is_latex(&self, block: &'src Block<'src>) -> bool {
+        match block.declared_style() {
+            Some("latexmath") => return true,
+            Some("asciimath") => return false,
+            _ => {}
+        }
+
+        self.attribute("stem")
+            .is_some_and(|stem| stem == "latexmath")
     }
 
     /// Highlight a listing's source, if this build can and the block asked for
@@ -225,7 +257,8 @@ impl<'src> Renderer<'src> {
         self.open_wrapper(block, "literalblock");
         self.block_title(block);
         self.out.open("div", None, &["content"]);
-        self.out.line(&format!("<pre>{content}</pre>"));
+        self.out
+            .line(&format!("<pre{}>{content}</pre>", pre_class(block)));
         self.out.close("div");
         self.out.close("div");
     }
@@ -492,6 +525,21 @@ impl<'src> Renderer<'src> {
                 self.out.close("div");
             }
 
+            CompoundDelimitedContext::Open if block.declared_style() == Some("abstract") => {
+                // An abstract is set like a quotation rather than like an open
+                // block, which is the one style that changes an open block's
+                // shape entirely.
+                let classes = wrapper_classes(block, &["quoteblock", "abstract"]);
+                let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+                self.out.open("div", block.id(), &classes);
+                self.block_title(block);
+                self.out.line("<blockquote>");
+                self.blocks(compound.child_blocks());
+                self.out.line("</blockquote>");
+                self.out.close("div");
+            }
+
             CompoundDelimitedContext::Open => {
                 self.open_wrapper(block, "openblock");
                 self.block_title(block);
@@ -554,6 +602,26 @@ fn is_mermaid<'src>(block: &'src Block<'src>) -> bool {
 
 /// The language a listing block declares, from `[source,rust]` or
 /// `[source,language=rust]`.
+/// The `nowrap` class a `<pre>` carries when the block asked for it, ready to
+/// be appended to a class list that already has something in it.
+fn nowrap<'src>(block: &'src Block<'src>) -> &'static str {
+    if block.has_option("nowrap") {
+        " nowrap"
+    } else {
+        ""
+    }
+}
+
+/// The whole `class` attribute for a `<pre>` that has no other class, or an
+/// empty string when the block asked for nothing.
+fn pre_class<'src>(block: &'src Block<'src>) -> &'static str {
+    if block.has_option("nowrap") {
+        " class=\"nowrap\""
+    } else {
+        ""
+    }
+}
+
 fn source_language<'src>(block: &'src Block<'src>) -> Option<&'src str> {
     if block.declared_style() != Some("source") {
         return None;
