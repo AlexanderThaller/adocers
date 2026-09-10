@@ -153,9 +153,9 @@ are part of the language rather than of each tool's dialect.
 
 === Listings and source
 
-A `----` block is verbatim. Adding a language emits the class and `data-lang`
-attribute that a client-side highlighter looks for — this renderer sets up the
-hooks but does not highlight anything itself.
+A `----` block is verbatim. Adding a language highlights it, with tree-sitter
+grammars compiled into the binary — so the colours are markup in the page rather
+than the work of a script in the reader's browser.
 
 [source,rust]
 ----
@@ -166,7 +166,45 @@ fn main() {
 }
 ----
 <1> Callouts attach to the lines they mark.
-<2> They render as an ordered list beneath the block.
+<2> They render as an ordered list beneath the block, and survive highlighting.
+
+Because a grammar knows what it is reading, `fn` is a keyword where Rust means
+one and ordinary text where it does not — inside the string and the comment
+below, a highlighter matching words would have coloured both.
+
+[source,python]
+----
+def describe(fn):        # "fn" here is a parameter, not a keyword
+    return f"fn {fn}"    # and here it is part of a string
+----
+
+The languages with a grammar compiled in are AsciiDoc's usual suspects:
+`rust`, `python`, `javascript`, `typescript`, `tsx`, `go`, `c`, `bash`, `java`,
+`json`, `toml`, `yaml`, `html` and `css`. The names people actually write are
+understood too — `rs`, `py`, `js`, `ts`, `sh`, `console`, `yml` and so on — and
+a language with no grammar is simply left plain:
+
+[source,go]
+----
+func main() {
+    ch := make(chan int, 1)
+    go func() { ch <- 42 }()
+    fmt.Println(<-ch)
+}
+----
+
+[source,yaml]
+----
+name: adocers
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest    # a comment
+----
+
+Every block keeps its `language-…` class either way, so a page can still be
+highlighted in the browser if you would rather. `--no-highlight` leaves the code
+plain, and a build without the `highlight` feature has no grammars in it at all.
 
 === Literal blocks
 

@@ -21,6 +21,17 @@ pub const DEFAULT: &str = r#"
   --admon-important: #bf6900;
   --admon-caution: #bf3400;
   --admon-warning: #bf0000;
+  /* Syntax highlighting. */
+  --hl-comment: #6a737d;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-function: #6639ba;
+  --hl-type: #953800;
+  --hl-constant: #0550ae;
+  --hl-property: #0550ae;
+  --hl-tag: #116329;
+  --hl-punctuation: #57606a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -38,6 +49,16 @@ pub const DEFAULT: &str = r#"
     --admon-important: #e08c3e;
     --admon-caution: #f0764a;
     --admon-warning: #f0716f;
+    --hl-comment: #8b949e;
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-number: #79c0ff;
+    --hl-function: #d2a8ff;
+    --hl-type: #ffa657;
+    --hl-constant: #79c0ff;
+    --hl-property: #79c0ff;
+    --hl-tag: #7ee787;
+    --hl-punctuation: #8b949e;
   }
 }
 
@@ -85,6 +106,28 @@ code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 3px; }
 pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; overflow-x: auto; line-height: 1.45; }
 pre code { background: none; padding: 0; }
 .listingblock, .literalblock { margin-bottom: 1.25rem; }
+
+/* Syntax highlighting. Several tree-sitter captures share a colour on purpose:
+   a builtin function is still a function to a reader, and a listing that picks
+   out everything picks out nothing. */
+.hl-comment { color: var(--hl-comment); font-style: italic; }
+.hl-keyword { color: var(--hl-keyword); }
+.hl-string { color: var(--hl-string); }
+.hl-number { color: var(--hl-number); }
+.hl-constant { color: var(--hl-constant); }
+.hl-function { color: var(--hl-function); }
+.hl-type { color: var(--hl-type); }
+.hl-property { color: var(--hl-property); }
+.hl-attr { color: var(--hl-property); }
+.hl-tag { color: var(--hl-tag); }
+.hl-escape { color: var(--hl-number); }
+.hl-label { color: var(--hl-type); }
+.hl-punctuation, .hl-operator { color: var(--hl-punctuation); }
+/* Variables and parameters are left in the body colour: they are most of a
+   listing, and colouring them leaves nothing for the eye to catch on. */
+.hl-variable, .hl-parameter, .hl-unknown { color: inherit; }
+/* A callout keeps its own weight against whatever the highlighter did. */
+.listingblock .conum { color: var(--accent); font-weight: 600; font-style: normal; }
 
 /* Quotes */
 .quoteblock { margin: 1.25rem 0; }

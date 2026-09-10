@@ -65,6 +65,10 @@ pub struct CommonArgs {
     )]
     pub attributes: Vec<String>,
 
+    /// Leave source blocks unhighlighted.
+    #[arg(long = "no-highlight", global = true)]
+    pub no_highlight: bool,
+
     /// Mark admonitions with their label instead of an icon.
     #[arg(long = "no-icons", global = true)]
     pub no_icons: bool,

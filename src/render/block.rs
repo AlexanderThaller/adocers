@@ -1,25 +1,30 @@
 //! Block-level rendering: the dispatch from a parsed [`Block`] to its markup.
 
-use asciidoc_parser::blocks::{
-    AdmonitionBlock,
-    Block,
-    Break,
-    BreakType,
-    CompoundDelimitedBlock,
-    CompoundDelimitedContext,
-    IsBlock,
-    Preamble,
-    QuoteBlock,
-    QuoteType,
-    RawDelimitedBlock,
-    SectionBlock,
-    SectionType,
-    SimpleBlock,
-    SimpleBlockStyle,
+use asciidoc_parser::{
+    blocks::{
+        AdmonitionBlock,
+        Block,
+        Break,
+        BreakType,
+        CompoundDelimitedBlock,
+        CompoundDelimitedContext,
+        IsBlock,
+        Preamble,
+        QuoteBlock,
+        QuoteType,
+        RawDelimitedBlock,
+        SectionBlock,
+        SectionType,
+        SimpleBlock,
+        SimpleBlockStyle,
+    },
+    content::Content,
 };
 
 use crate::render::{
     Renderer,
+    callout,
+    highlight,
     html::{
         escape_attr,
         escape_text,
@@ -105,7 +110,9 @@ impl<'src> Renderer<'src> {
             }
 
             SimpleBlockStyle::Literal => self.literal(block, content),
-            SimpleBlockStyle::Listing | SimpleBlockStyle::Source => self.listing(block, content),
+            SimpleBlockStyle::Listing | SimpleBlockStyle::Source => {
+                self.listing(block, simple.content());
+            }
         }
     }
 
@@ -120,7 +127,7 @@ impl<'src> Renderer<'src> {
         let content = raw.content().rendered_html();
 
         match raw.raw_context().as_ref() {
-            "listing" => self.listing(block, content),
+            "listing" => self.listing(block, raw.content()),
             "literal" => self.literal(block, content),
 
             "stem" => {
@@ -148,11 +155,13 @@ impl<'src> Renderer<'src> {
         }
     }
 
-    /// `<div class="listingblock">`, with syntax-highlighting hooks when the
-    /// block declares a source language.
-    fn listing(&mut self, block: &'src Block<'src>, content: &str) {
+    /// `<div class="listingblock">`, syntax highlighted when the block declares
+    /// a language a compiled-in grammar covers.
+    fn listing(&mut self, block: &'src Block<'src>, content: &'src Content<'src>) {
+        let rendered = content.rendered_html();
+
         if self.options.mermaid.is_some() && is_mermaid(block) {
-            self.mermaid_block(block, content);
+            self.mermaid_block(block, rendered);
             return;
         }
 
@@ -162,18 +171,47 @@ impl<'src> Renderer<'src> {
 
         match source_language(block) {
             Some(language) => {
+                let body = self
+                    .highlighted(language, content)
+                    .unwrap_or_else(|| rendered.to_string());
                 let language = escape_attr(language);
+
                 self.out.line(&format!(
                     "<pre class=\"highlight\"><code class=\"language-{language}\" \
-                     data-lang=\"{language}\">{content}</code></pre>"
+                     data-lang=\"{language}\">{body}</code></pre>"
                 ));
             }
 
-            None => self.out.line(&format!("<pre>{content}</pre>")),
+            None => self.out.line(&format!("<pre>{rendered}</pre>")),
         }
 
         self.out.close("div");
         self.out.close("div");
+    }
+
+    /// Highlight a listing's source, if this build can and the block asked for
+    /// a language it knows.
+    ///
+    /// The highlighter is given the block's original text, not the parser's
+    /// rendering of it: the rendering is already escaped, and a highlighter
+    /// needs the code as the author wrote it. Escaping is then the
+    /// highlighter's job, which it does as it emits.
+    fn highlighted(&self, language: &str, content: &'src Content<'src>) -> Option<String> {
+        if !self.options.highlight {
+            return None;
+        }
+
+        let source = content.original().data();
+
+        // Callout markers are the parser's rendering, not the author's code, so
+        // they come out before the highlighter sees them and go back after.
+        // When the two readings of the source disagree, the block is left to
+        // the parser entirely rather than highlighted with its callouts lost.
+        let callouts = callout::locate(source, content.rendered_html())?;
+        let stripped = callout::strip(source, &callouts);
+        let highlighted = highlight::highlight(language, &stripped)?;
+
+        Some(callout::reapply(&highlighted, &callouts))
     }
 
     /// `<div class="literalblock">`.

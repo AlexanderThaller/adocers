@@ -7,9 +7,13 @@
 //! class names), so stylesheets written for Asciidoctor apply unchanged.
 
 mod block;
+mod callout;
 mod css;
 pub mod diagram;
 mod html;
+
+#[cfg_attr(not(feature = "highlight"), path = "highlight_off.rs")]
+mod highlight;
 mod icons;
 mod list;
 mod media;
@@ -50,6 +54,12 @@ pub struct Options {
 
     /// Whether an admonition is marked with an icon rather than its label.
     pub icons: bool,
+
+    /// Whether a source block is syntax highlighted.
+    ///
+    /// A block still carries its `language-…` class either way, so a page can
+    /// be highlighted in the browser instead.
+    pub highlight: bool,
 
     /// Where the page gets the drawing module, or `None` to render a diagram
     /// as the listing block it was written as.

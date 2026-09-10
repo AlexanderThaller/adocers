@@ -48,6 +48,7 @@ adocers -o - doc.adoc       # writes to standard output
 | `--no-css` | Emit the page unstyled. |
 | `-a, --attribute <NAME[=VALUE]>` | Set a document attribute. `NAME`, `NAME=VALUE`, `NAME!` and `!NAME` all work, and the document cannot override them. Repeatable. |
 | `--no-icons` | Mark admonitions with their label instead of an icon. |
+| `--no-highlight` | Leave source blocks unhighlighted. |
 | `--mermaid-url <URL>` | Load mermaid from this URL instead of the built-in copy. Must be a UMD build. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
@@ -175,6 +176,30 @@ light/dark preference.
 `asciidoc-parser` renders inline content only; block and document assembly is
 this tool's own back end (`src/render/`). `render` and `serve` go through the
 same pipeline, so a document looks the same either way.
+
+### Syntax highlighting
+
+A source block is highlighted with [tree-sitter](https://tree-sitter.github.io)
+grammars compiled into the binary, so the colours are markup in the page rather
+than the work of a script in the reader's browser. A grammar knows what it is
+reading, so `fn` is a keyword where Rust means one and ordinary text inside a
+string or a comment.
+
+`rust`, `python`, `javascript`, `typescript`, `tsx`, `go`, `c`, `bash`, `java`,
+`json`, `toml`, `yaml`, `html` and `css` have grammars, under the names people
+actually write — `rs`, `py`, `js`, `ts`, `sh`, `console`, `yml` and the rest.
+A language with no grammar is left plain.
+
+Callouts survive highlighting. A `<1>` marker is taken out before the source
+reaches the highlighter and put back as the marker the parser would have
+rendered, with the parser left as the authority on which `<1>` is a callout and
+which is a comparison against a generic — where the two disagree the block is
+left to the parser rather than guessed at.
+
+Every block keeps its `language-…` class either way, so a page can still be
+highlighted in the browser instead. `--no-highlight` leaves the code plain, and
+`--no-default-features` builds without the `highlight` feature, leaving the
+grammars out of the binary entirely.
 
 ### Admonition icons
 
