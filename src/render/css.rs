@@ -73,9 +73,15 @@ body {
   line-height: 1.6;
 }
 
-#header, #content, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
+#header, #content, #footnotes, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
 #header { padding-top: 2.5rem; }
 #footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
+
+/* Footnote definitions, gathered under a rule at the foot of the page. */
+#footnotes { margin-top: 2.5rem; font-size: 0.9rem; color: var(--muted); }
+#footnotes hr { margin: 0 0 1rem; }
+#footnotes .footnote { margin-bottom: 0.5rem; padding-left: 1.5rem; text-indent: -1.5rem; }
+#footnotes .footnote > a { font-weight: 600; }
 
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 2rem 0 0.75rem; font-weight: 600; }
 h1 { font-size: 2rem; margin-top: 0; }
@@ -229,9 +235,11 @@ table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; 
   body.toc2.toc-right #toc { right: 0; border-left: 1px solid var(--rule); }
   body.toc2.toc-left #header,
   body.toc2.toc-left #content,
+  body.toc2.toc-left #footnotes,
   body.toc2.toc-left #footer { margin-left: calc(16rem + 2rem); }
   body.toc2.toc-right #header,
   body.toc2.toc-right #content,
+  body.toc2.toc-right #footnotes,
   body.toc2.toc-right #footer { margin-right: calc(16rem + 2rem); }
 }
 "#;
