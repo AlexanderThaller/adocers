@@ -119,8 +119,14 @@ malformed document is visible without leaving the browser.
 ### Live reload
 
 Each page holds the value of a counter that goes up whenever the directory
-changes. The page asks the server for the current value; the server does not
-answer until the two differ, or twenty seconds pass and the request is worth
+changes. Not every change counts: a file being *read* is not a change to it, and
+neither is anything under `target/`, `node_modules/` or a dotted directory such
+as `.git/`. Serving a project root rather than a documentation directory is easy
+to do — `adocers serve` with no argument does it — and a build or a commit would
+otherwise reload the reader's browser every few seconds.
+
+The page asks the server for the current value; the server does not answer
+until the two differ, or twenty seconds pass and the request is worth
 renewing. So a change reaches the browser as soon as the file system reports it,
 with no polling in between, and a page that loses its connection backs off and
 recovers on its own.

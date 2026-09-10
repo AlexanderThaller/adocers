@@ -8,7 +8,10 @@
 //! browser as soon as the file system reports it, with no polling in between.
 
 use std::{
-    path::Path,
+    path::{
+        Component,
+        Path,
+    },
     time::Duration,
 };
 
@@ -18,6 +21,7 @@ use anyhow::{
 };
 use notify_debouncer_full::{
     DebounceEventResult,
+    DebouncedEvent,
     Debouncer,
     RecommendedCache,
     new_debouncer,
@@ -31,6 +35,16 @@ use tokio::sync::watch;
 
 /// How long to let file-system events settle before counting them as a change.
 const DEBOUNCE: Duration = Duration::from_millis(200);
+
+/// Directories whose contents cannot be part of a served page, and which change
+/// often enough that watching them makes live reload useless.
+///
+/// Serving a project root rather than a documentation directory is an easy
+/// thing to do — `adocers serve` with no argument does it — and a build writing
+/// into `target/` would otherwise reload the reader's browser every few
+/// seconds. Anything beginning with a dot is skipped for the same reason,
+/// `.git` most of all; the directory listing already leaves those out too.
+const IGNORED: &[&str] = &["target", "node_modules"];
 
 /// How long a waiting request is held before it is answered unchanged.
 ///
@@ -64,6 +78,7 @@ pub struct Watch {
 
 /// Start watching `root`, returning the shared handle and the watch's guard.
 pub fn start(root: &Path) -> Result<(Reload, Watch)> {
+    let watched = root.to_path_buf();
     let (sender, _) = watch::channel(0_u64);
     let notified = sender.clone();
 
@@ -72,11 +87,9 @@ pub fn start(root: &Path) -> Result<(Reload, Watch)> {
             return;
         };
 
-        // Reading a file is not a change to it.
-        if events
-            .iter()
-            .all(|event| matches!(event.kind, EventKind::Access(_)))
-        {
+        // Nothing a reader could see has changed if every event was a read, or
+        // was about a file no page can depend on.
+        if events.iter().all(|event| is_uninteresting(event, &watched)) {
             return;
         }
 
@@ -96,6 +109,40 @@ pub fn start(root: &Path) -> Result<(Reload, Watch)> {
             _debouncer: debouncer,
         },
     ))
+}
+
+/// Whether an event says nothing about what a reader would see.
+fn is_uninteresting(event: &DebouncedEvent, root: &Path) -> bool {
+    // Reading a file is not a change to it — and the server reads every file it
+    // serves, so taking these for changes would reload the page that caused
+    // them, over and over.
+    if matches!(event.kind, EventKind::Access(_)) {
+        return true;
+    }
+
+    // An event with no path says nothing about where it came from, so it is
+    // taken at face value rather than assumed to be noise.
+    !event.paths.is_empty() && event.paths.iter().all(|path| is_ignored(path, root))
+}
+
+/// Whether a path lies somewhere a served page can never depend on.
+fn is_ignored(path: &Path, root: &Path) -> bool {
+    // Only the part below the root is judged. The root itself may perfectly
+    // well sit in a dotted directory, and holding that against every event
+    // would stop the whole tree from ever reloading.
+    let Ok(relative) = path.strip_prefix(root) else {
+        return true;
+    };
+
+    relative.components().any(|component| {
+        let Component::Normal(name) = component else {
+            return false;
+        };
+
+        let name = name.to_string_lossy();
+
+        name.starts_with('.') || IGNORED.contains(&name.as_ref())
+    })
 }
 
 impl Reload {
@@ -160,4 +207,63 @@ pub fn script(generation: u64) -> String {
 }})();
 </script>"#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ROOT: &str = "/srv/docs";
+
+    #[test]
+    fn a_build_or_a_commit_is_not_a_change_a_reader_can_see() {
+        for path in [
+            "/srv/docs/target/debug/adocers",
+            "/srv/docs/target/debug/deps/x.rlib",
+            "/srv/docs/.git/index",
+            "/srv/docs/node_modules/x/index.js",
+            "/srv/docs/docs/.cache/thing",
+        ] {
+            assert!(
+                is_ignored(Path::new(path), Path::new(ROOT)),
+                "`{path}` should not reload a page"
+            );
+        }
+    }
+
+    #[test]
+    fn an_edit_to_something_served_is() {
+        for path in [
+            "/srv/docs/guide.adoc",
+            "/srv/docs/chapters/one.adoc",
+            "/srv/docs/images/diagram.svg",
+            "/srv/docs/targets/notes.adoc",
+        ] {
+            assert!(
+                !is_ignored(Path::new(path), Path::new(ROOT)),
+                "`{path}` should reload a page"
+            );
+        }
+    }
+
+    #[test]
+    fn the_root_may_itself_sit_in_a_dotted_directory() {
+        // Judging the whole path rather than the part below the root would
+        // ignore everything here and never reload at all.
+        let root = Path::new("/home/me/.local/docs");
+
+        assert!(!is_ignored(
+            Path::new("/home/me/.local/docs/guide.adoc"),
+            root
+        ));
+        assert!(is_ignored(
+            Path::new("/home/me/.local/docs/.git/index"),
+            root
+        ));
+    }
+
+    #[test]
+    fn a_path_outside_the_root_is_nothing_to_do_with_us() {
+        assert!(is_ignored(Path::new("/etc/passwd"), Path::new(ROOT)));
+    }
 }
