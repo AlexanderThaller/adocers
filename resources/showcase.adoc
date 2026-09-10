@@ -1,6 +1,8 @@
 = adocers Showcase
 Alexander Thaller <claude@thallerware.de>
 v1.0, 2026-09-10: one page through every feature
+:status: living document
+:page-tags: asciidoc, rendering, showcase
 :toc: left
 :toclevels: 3
 :sectnums:
@@ -22,6 +24,93 @@ adocers serve resources                  # or read it in a browser
 TIP: Everything below is rendered by the back end in `src/render/`.
 `asciidoc-parser` renders inline content — bold, links, cross references — but
 stops there: assembling blocks and documents is this tool's own work.
+
+== The document header
+
+Everything above the first paragraph is the document header: the title, who
+wrote it, which revision it is, and whatever else the document has to say about
+itself. This page's own header is
+
+[source,asciidoc]
+----
+= adocers Showcase
+Alexander Thaller <claude@thallerware.de>
+v1.0, 2026-09-10: one page through every feature
+:status: living document
+:page-tags: asciidoc, rendering, showcase
+:toc: left
+:sectnums:
+----
+
+and what it produced is at the top of this page: a labelled line each for the
+author, the revision, the status and the tags.
+
+=== Author and revision
+
+An author's address joins their name in angle brackets, the form you already
+know from a commit or a mail header. Several authors share one line under a
+plural label.
+
+A revision can be written either way, and the two mean the same thing — the
+line sets those attributes anyway:
+
+[source,asciidoc]
+----
+v1.0, 2026-09-10: a remark    <1>
+
+:revnumber: 1.0               <2>
+:revdate: 2026-09-10
+:revremark: a remark
+----
+<1> The revision line, on the line below the author.
+<2> The same thing, written as the attributes it sets.
+
+The remark is a sentence about the revision rather than another value belonging
+to it, so it is set apart below the labels. A revision that is a date with no
+number is labelled `Date`, because a date is not a version.
+
+=== Other metadata
+
+A header's attributes come in two kinds: facts about the document, and
+instructions to the renderer. `:status:` is the first kind and `:sectnums:` the
+second, and only the first is any use to a reader.
+
+[cols="2,3"]
+|===
+|Written |Shown as
+
+|`:status: implementing`
+|Status: implementing
+
+|`:page-tags: design, flux, ci`
+|Tags, each as its own mark
+
+|`:page-last-reviewed: 2026-01-01`
+|Last reviewed: 2026-01-01
+
+|`:keywords: alpha, beta`
+|Keywords, each as its own mark
+
+|`:sectnums:`, `:icons: font`, `:toc:`
+|Nothing. These are settings.
+|===
+
+Anything in Antora's `page-` namespace is shown with the prefix dropped, so
+`:page-tags:` reads as `Tags`. Beyond that the names shown are `status`,
+`keywords`, `category`, `edition`, `organization` and `copyright`.
+
+That is an allowlist rather than a blocklist, so an attribute nobody thought
+about is left out rather than shown by accident. To show one that is not on it,
+put it in the `page-` namespace:
+
+[source,asciidoc]
+----
+:page-supersedes: 0019
+----
+
+A list of tags or keywords is a set of separate things that happens to be
+written with commas, so each is shown as its own mark rather than run together
+into a sentence.
 
 == Text
 
