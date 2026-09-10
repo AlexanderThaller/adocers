@@ -91,11 +91,11 @@ impl FsIncludeHandler {
 }
 
 impl IncludeFileHandler for FsIncludeHandler {
-    fn resolve_target<'src>(
+    fn resolve_target(
         &self,
         source: Option<&str>,
         target: &str,
-        _attrlist: &Attrlist<'src>,
+        _attrlist: &Attrlist<'_>,
         _parser: &Parser,
     ) -> IncludeResolution {
         // Fetching a target over the network is out of scope; report it the way

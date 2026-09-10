@@ -59,7 +59,7 @@ impl Reporter {
     ///
     /// `display_name` is the path shown in the diagnostic gutter; it is used
     /// only for display, never to re-read the file.
-    pub fn report(&self, document: &Document<'_>, display_name: &str) -> Counts {
+    pub fn report(self, document: &Document<'_>, display_name: &str) -> Counts {
         let mut counts = Counts::default();
 
         // Every span is an offset into this text, so `ariadne` and the parser
@@ -90,7 +90,7 @@ impl Reporter {
 
     /// Turn one warning into a laid-out report.
     fn build<'a>(
-        &self,
+        self,
         document: &Document<'_>,
         display_name: &'a str,
         source_text: &str,

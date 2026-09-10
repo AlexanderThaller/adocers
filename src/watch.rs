@@ -27,7 +27,7 @@ use notify_debouncer_full::{
 };
 
 use crate::{
-    cli::Cli,
+    cli::CommonArgs,
     diagnostics::Reporter,
     job::{
         self,
@@ -45,11 +45,11 @@ const DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// Render every job once, then keep re-rendering the ones whose sources change,
 /// until the process is interrupted.
-pub fn run(jobs: &[Job], cli: &Cli, options: &Options, reporter: &Reporter) -> Result<()> {
+pub fn run(jobs: &[Job], common: &CommonArgs, options: &Options, reporter: Reporter) -> Result<()> {
     let mut sources = Sources::default();
 
     for (index, job) in jobs.iter().enumerate() {
-        render(job, index, cli, options, reporter, &mut sources);
+        render(job, index, common, options, reporter, &mut sources);
     }
 
     let (tx, rx) = mpsc::channel();
@@ -103,7 +103,7 @@ pub fn run(jobs: &[Job], cli: &Cli, options: &Options, reporter: &Reporter) -> R
                 continue;
             };
 
-            render(job, index, cli, options, reporter, &mut sources);
+            render(job, index, common, options, reporter, &mut sources);
         }
 
         // A newly added include may live in a directory nothing was watching.
@@ -119,12 +119,12 @@ pub fn run(jobs: &[Job], cli: &Cli, options: &Options, reporter: &Reporter) -> R
 fn render(
     job: &Job,
     index: usize,
-    cli: &Cli,
+    common: &CommonArgs,
     options: &Options,
-    reporter: &Reporter,
+    reporter: Reporter,
     sources: &mut Sources,
 ) {
-    match job::run(job, cli, options, reporter) {
+    match job::run(job, common, options, reporter) {
         Ok(outcome) => {
             sources.record(index, &outcome.dependencies);
             eprintln!("adocers: rendered {}", job.input.display());

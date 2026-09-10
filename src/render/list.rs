@@ -1,5 +1,7 @@
 //! List rendering: unordered, ordered, description and callout lists.
 
+use std::fmt::Write as _;
+
 use asciidoc_parser::blocks::{
     Block,
     IsBlock,
@@ -12,6 +14,7 @@ use asciidoc_parser::blocks::{
 
 use crate::render::{
     Renderer,
+    block,
     html::escape_attr,
 };
 
@@ -41,7 +44,7 @@ impl<'src> Renderer<'src> {
                 .filter(|style| matches!(*style, "square" | "circle" | "disc" | "none"))
         };
 
-        let mut wrapper = self.wrapper_classes(block, "ulist");
+        let mut wrapper = block::wrapper_classes(block, "ulist");
         if let Some(variant) = variant {
             wrapper.push(variant.to_string());
         }
@@ -69,7 +72,7 @@ impl<'src> Renderer<'src> {
     fn ordered_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
         let style = list.marker_style().unwrap_or("arabic");
 
-        let mut wrapper = self.wrapper_classes(block, "olist");
+        let mut wrapper = block::wrapper_classes(block, "olist");
         wrapper.push(style.to_string());
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
@@ -81,11 +84,11 @@ impl<'src> Renderer<'src> {
         // The `type` attribute is what makes a browser render anything other
         // than arabic numerals; arabic is the default and needs none.
         if let Some(numbering) = html_list_type(style) {
-            attributes.push_str(&format!(" type=\"{numbering}\""));
+            let _ = write!(attributes, " type=\"{numbering}\"");
         }
 
         if let Some(start) = list.start() {
-            attributes.push_str(&format!(" start=\"{start}\""));
+            let _ = write!(attributes, " start=\"{start}\"");
         }
 
         if block.has_option("reversed") {
@@ -106,7 +109,7 @@ impl<'src> Renderer<'src> {
 
     /// `<1>` callouts, which annotate the listing block above them.
     fn callout_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let mut wrapper = self.wrapper_classes(block, "colist");
+        let mut wrapper = block::wrapper_classes(block, "colist");
         wrapper.push("arabic".to_string());
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
@@ -179,7 +182,7 @@ impl<'src> Renderer<'src> {
 
     /// `[qanda]`, where each term is a numbered question.
     fn qanda_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let mut wrapper = self.wrapper_classes(block, "qlist");
+        let mut wrapper = block::wrapper_classes(block, "qlist");
         wrapper.push("qanda".to_string());
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();

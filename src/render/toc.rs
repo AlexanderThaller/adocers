@@ -14,6 +14,7 @@ use asciidoc_parser::blocks::{
 
 use crate::render::{
     Renderer,
+    block,
     html::escape_attr,
 };
 
@@ -29,11 +30,11 @@ struct Entry {
     children: Vec<Entry>,
 }
 
-impl<'src> Renderer<'src> {
+impl Renderer<'_> {
     /// Render the `#toc` container, if the document has any sections to list.
     pub(super) fn toc(&mut self) {
         let depth = self.document.toc_levels();
-        let entries = self.entries(self.document.child_blocks(), 1, depth);
+        let entries = entries(self.document.child_blocks(), 1, depth);
 
         if entries.is_empty() {
             return;
@@ -65,55 +66,6 @@ impl<'src> Renderer<'src> {
         self.toc();
     }
 
-    /// Collect the sections at one level of the tree, descending until `depth`.
-    fn entries(
-        &self,
-        blocks: impl Iterator<Item = &'src Block<'src>>,
-        level: usize,
-        depth: usize,
-    ) -> Vec<Entry> {
-        if level > depth {
-            return Vec::new();
-        }
-
-        let mut entries = Vec::new();
-
-        for block in blocks {
-            match block {
-                Block::Section(section) if !is_excluded(section) => {
-                    entries.push(Entry {
-                        id: section.id().map(str::to_string),
-                        title: format!(
-                            "{}{}",
-                            self.section_prefix_for_toc(section),
-                            section.section_title()
-                        ),
-                        children: self.entries(section.child_blocks(), level + 1, depth),
-                    });
-                }
-
-                // A preamble sits between the header and the first section, so
-                // the sections after it are siblings of the preamble, not of
-                // its contents; nothing else can contain a section.
-                _ => {}
-            }
-        }
-
-        entries
-    }
-
-    /// The number shown before a section's title in the outline.
-    fn section_prefix_for_toc(&self, section: &'src SectionBlock<'src>) -> String {
-        if let Some(caption) = section.caption() {
-            return caption.to_string();
-        }
-
-        match section.section_number() {
-            Some(number) => format!("{number}. "),
-            None => String::new(),
-        }
-    }
-
     /// Emit one `<ul class="sectlevelN">` and everything under it.
     fn render_entries(&mut self, entries: &[Entry], level: usize) {
         if entries.is_empty() {
@@ -141,6 +93,40 @@ impl<'src> Renderer<'src> {
 
         self.out.close("ul");
     }
+}
+
+/// Collect the sections at one level of the tree, descending until `depth`.
+fn entries<'src>(
+    blocks: impl Iterator<Item = &'src Block<'src>>,
+    level: usize,
+    depth: usize,
+) -> Vec<Entry> {
+    if level > depth {
+        return Vec::new();
+    }
+
+    let mut outline = Vec::new();
+
+    for block in blocks {
+        // A preamble sits between the header and the first section, so the
+        // sections after it are siblings of the preamble, not of its contents;
+        // nothing else can contain a section.
+        if let Block::Section(section) = block
+            && !is_excluded(section)
+        {
+            outline.push(Entry {
+                id: section.id().map(str::to_string),
+                title: format!(
+                    "{}{}",
+                    block::section_prefix(section),
+                    section.section_title()
+                ),
+                children: entries(section.child_blocks(), level + 1, depth),
+            });
+        }
+    }
+
+    outline
 }
 
 /// Whether a section is kept out of the outline.

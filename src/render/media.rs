@@ -1,5 +1,7 @@
 //! Image, video and audio blocks.
 
+use std::fmt::Write as _;
+
 use asciidoc_parser::{
     attributes::Attrlist,
     blocks::{
@@ -29,9 +31,8 @@ impl<'src> Renderer<'src> {
         let attrlist = media.macro_attrlist();
         let target = media.resolved_target();
 
-        let alt = positional(attrlist, "alt", 1)
-            .map(str::to_string)
-            .unwrap_or_else(|| alt_from_target(target));
+        let alt =
+            positional(attrlist, "alt", 1).map_or_else(|| alt_from_target(target), str::to_string);
 
         let mut img = format!(
             "<img src=\"{}\" alt=\"{}\"",
@@ -39,13 +40,8 @@ impl<'src> Renderer<'src> {
             escape_attr(&alt)
         );
 
-        if let Some(width) = positional(attrlist, "width", 2) {
-            img.push_str(&format!(" width=\"{}\"", escape_attr(width)));
-        }
-
-        if let Some(height) = positional(attrlist, "height", 3) {
-            img.push_str(&format!(" height=\"{}\"", escape_attr(height)));
-        }
+        attribute(&mut img, "width", positional(attrlist, "width", 2));
+        attribute(&mut img, "height", positional(attrlist, "height", 3));
 
         img.push('>');
 
@@ -73,17 +69,9 @@ impl<'src> Renderer<'src> {
 
         let mut tag = format!("<video src=\"{}\"", escape_attr(media.resolved_target()));
 
-        if let Some(width) = named(attrlist, "width") {
-            tag.push_str(&format!(" width=\"{}\"", escape_attr(width)));
-        }
-
-        if let Some(height) = named(attrlist, "height") {
-            tag.push_str(&format!(" height=\"{}\"", escape_attr(height)));
-        }
-
-        if let Some(poster) = named(attrlist, "poster") {
-            tag.push_str(&format!(" poster=\"{}\"", escape_attr(poster)));
-        }
+        attribute(&mut tag, "width", named(attrlist, "width"));
+        attribute(&mut tag, "height", named(attrlist, "height"));
+        attribute(&mut tag, "poster", named(attrlist, "poster"));
 
         if !attrlist.has_option("nocontrols") {
             tag.push_str(" controls");
@@ -142,13 +130,21 @@ impl<'src> Renderer<'src> {
     }
 }
 
+/// Append ` name="value"` to a tag under construction, if there is a value.
+fn attribute(tag: &mut String, name: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        // Writing to a `String` cannot fail.
+        let _ = write!(tag, " {name}=\"{}\"", escape_attr(value));
+    }
+}
+
 /// A macro attribute that may be given either by name or by position.
 fn positional<'src>(attrlist: &'src Attrlist<'src>, name: &str, index: usize) -> Option<&'src str> {
     named(attrlist, name).or_else(|| {
         attrlist
             .nth_attribute(index)
             .filter(|attribute| attribute.name().is_none())
-            .map(|attribute| attribute.value())
+            .map(asciidoc_parser::attributes::ElementAttribute::value)
             .filter(|value| !value.is_empty())
     })
 }
@@ -157,7 +153,7 @@ fn positional<'src>(attrlist: &'src Attrlist<'src>, name: &str, index: usize) ->
 fn named<'src>(attrlist: &'src Attrlist<'src>, name: &str) -> Option<&'src str> {
     attrlist
         .named_attribute(name)
-        .map(|attribute| attribute.value())
+        .map(asciidoc_parser::attributes::ElementAttribute::value)
         .filter(|value| !value.is_empty())
 }
 

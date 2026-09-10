@@ -23,8 +23,8 @@ use asciidoc_parser::{
     },
 };
 
-use crate::render::html::{
-    Buffer,
+use crate::render::html::Buffer;
+pub use crate::render::html::{
     escape_attr,
     escape_text,
 };
@@ -40,6 +40,11 @@ pub struct Options {
     /// Ignored when [`fragment`](Self::fragment) is set, since a fragment has
     /// no `<head>` to put it in.
     pub stylesheet: Option<String>,
+
+    /// Markup appended just before `</body>`, for scripts and the like.
+    ///
+    /// Ignored when [`fragment`](Self::fragment) is set, for the same reason.
+    pub body_suffix: String,
 }
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
@@ -61,7 +66,7 @@ pub fn render<'src>(document: &'src Document<'src>, options: &Options) -> String
     if options.fragment {
         body
     } else {
-        page(document, options, &body)
+        document_page(document, options, &body)
     }
 }
 
@@ -83,7 +88,7 @@ struct Renderer<'src> {
     toc_rendered: bool,
 }
 
-impl<'src> Renderer<'src> {
+impl Renderer<'_> {
     /// Render the document header, body and footer into a single body fragment.
     ///
     /// An embedded fragment drops the page furniture — the `#header` and
@@ -313,17 +318,39 @@ fn toc_precedes_content(mode: TocMode) -> bool {
     )
 }
 
-/// Wrap a rendered body in a complete HTML page.
-fn page(document: &Document<'_>, options: &Options, body: &str) -> String {
+/// Everything about a standalone page that is not its body markup.
+///
+/// This is public so that a caller which builds its own body — the server's
+/// directory listing, say — can put it in the same page as a rendered document
+/// and have it look the same.
+#[derive(Clone, Debug, Default)]
+pub struct Page<'a> {
+    /// Value of the `lang` attribute on `<html>`.
+    pub lang: &'a str,
+
+    /// Plain-text `<title>`; markup here would be shown, not applied.
+    pub title: &'a str,
+
+    /// Value of the `description` meta tag, if there is one.
+    pub description: Option<&'a str>,
+
+    /// Class list for `<body>`.
+    pub body_classes: &'a str,
+
+    /// CSS to embed, or `None` for an unstyled page.
+    pub stylesheet: Option<&'a str>,
+
+    /// Markup appended just before `</body>`, for scripts and the like.
+    pub body_suffix: &'a str,
+}
+
+/// Wrap body markup in a complete HTML page.
+#[must_use]
+pub fn page(page: &Page<'_>, body: &str) -> String {
     let mut out = Buffer::new();
 
-    let lang = match document.attribute_value("lang") {
-        InterpretedValue::Value(lang) => lang,
-        _ => "en".to_string(),
-    };
-
     out.line("<!DOCTYPE html>");
-    out.line(&format!("<html lang=\"{}\">", escape_attr(&lang)));
+    out.line(&format!("<html lang=\"{}\">", escape_attr(page.lang)));
     out.line("<head>");
     out.line("<meta charset=\"UTF-8\">");
     out.line("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
@@ -332,22 +359,16 @@ fn page(document: &Document<'_>, options: &Options, body: &str) -> String {
         env!("CARGO_PKG_VERSION")
     ));
 
-    if let InterpretedValue::Value(description) = document.attribute_value("description") {
+    if let Some(description) = page.description {
         out.line(&format!(
             "<meta name=\"description\" content=\"{}\">",
-            escape_attr(&description)
+            escape_attr(description)
         ));
     }
 
-    // The `<title>` is plain text, so any markup the inline renderer produced
-    // for the doctitle has to come back out.
-    let title = document
-        .doctitle_sanitized()
-        .unwrap_or_else(|| "Untitled".to_string());
+    out.line(&format!("<title>{}</title>", escape_text(page.title)));
 
-    out.line(&format!("<title>{}</title>", escape_text(&title)));
-
-    if let Some(css) = &options.stylesheet {
+    if let Some(css) = page.stylesheet {
         out.line("<style>");
         out.line(css);
         out.line("</style>");
@@ -356,14 +377,50 @@ fn page(document: &Document<'_>, options: &Options, body: &str) -> String {
     out.line("</head>");
     out.line(&format!(
         "<body class=\"{}\">",
-        escape_attr(&body_classes(document))
+        escape_attr(page.body_classes)
     ));
     out.raw(body);
     out.newline();
+
+    if !page.body_suffix.is_empty() {
+        out.line(page.body_suffix);
+    }
+
     out.line("</body>");
     out.line("</html>");
 
     out.finish()
+}
+
+/// Wrap a rendered document's body in a page built from its own metadata.
+fn document_page(document: &Document<'_>, options: &Options, body: &str) -> String {
+    let lang = match document.attribute_value("lang") {
+        InterpretedValue::Value(lang) => lang,
+        _ => "en".to_string(),
+    };
+
+    let description = match document.attribute_value("description") {
+        InterpretedValue::Value(description) => Some(description),
+        _ => None,
+    };
+
+    // The `<title>` is plain text, so any markup the inline renderer produced
+    // for the doctitle has to come back out.
+    let title = document
+        .doctitle_sanitized()
+        .unwrap_or_else(|| "Untitled".to_string());
+
+    page(
+        &Page {
+            lang: &lang,
+            title: &title,
+            description: description.as_deref(),
+            body_classes: &body_classes(document),
+            stylesheet: options.stylesheet.as_deref(),
+            body_suffix: &options.body_suffix,
+        },
+        body,
+    )
 }
 
 /// The `<body>` class list, which is how Asciidoctor stylesheets learn where

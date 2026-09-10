@@ -20,7 +20,10 @@ use asciidoc_parser::{
 };
 
 use crate::{
-    cli::Cli,
+    cli::{
+        CommonArgs,
+        RenderArgs,
+    },
     diagnostics::{
         Counts,
         Reporter,
@@ -58,6 +61,9 @@ pub struct Job {
 /// What one render produced.
 #[derive(Clone, Debug)]
 pub struct Outcome {
+    /// The rendered HTML.
+    pub html: String,
+
     /// Diagnostics reported for the document.
     pub counts: Counts,
 
@@ -69,20 +75,20 @@ pub struct Outcome {
 }
 
 /// Work out where each input's HTML should go.
-pub fn plan(cli: &Cli) -> Result<Vec<Job>> {
-    let single = cli.inputs.len() == 1;
+pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
+    let single = args.inputs.len() == 1;
 
-    if cli.writes_to_stdout() && !single {
+    if args.writes_to_stdout() && !single {
         bail!(
             "`--output -` writes one document to standard output, but {} were given",
-            cli.inputs.len()
+            args.inputs.len()
         );
     }
 
-    let mut jobs = Vec::with_capacity(cli.inputs.len());
+    let mut jobs = Vec::with_capacity(args.inputs.len());
 
-    for input in &cli.inputs {
-        let destination = match &cli.output {
+    for input in &args.inputs {
+        let destination = match &args.output {
             None => Destination::File(html_sibling(input)),
 
             Some(output) if output == Path::new("-") => Destination::Stdout,
@@ -112,33 +118,59 @@ pub fn plan(cli: &Cli) -> Result<Vec<Job>> {
     Ok(jobs)
 }
 
-/// Parse, report and render one document.
-pub fn run(job: &Job, cli: &Cli, options: &Options, reporter: &Reporter) -> Result<Outcome> {
-    let source = fs::read_to_string(&job.input)
-        .with_context(|| format!("reading `{}`", job.input.display()))?;
+/// Parse and render one document, without deciding what to do with the result.
+///
+/// This is the whole pipeline a rendered page comes out of, and it is shared:
+/// the `render` command writes the HTML to a file, and `serve` hands it
+/// straight back to the browser.
+pub fn render_file(
+    input: &Path,
+    common: &CommonArgs,
+    options: &Options,
+    reporter: Reporter,
+) -> Result<Outcome> {
+    let source =
+        fs::read_to_string(input).with_context(|| format!("reading `{}`", input.display()))?;
 
     let dependencies = Dependencies::default();
-    dependencies.insert(job.input.clone());
+    dependencies.insert(input.to_path_buf());
 
-    let display_name = job.input.to_string_lossy().into_owned();
-    let safe_mode = cli.safe_mode.into();
+    let display_name = input.to_string_lossy().into_owned();
+    let safe_mode = common.safe_mode.into();
 
     let mut parser = Parser::default()
         .with_safe_mode(safe_mode)
         .with_primary_file_name(&display_name)
         .with_include_file_handler(FsIncludeHandler::new(
-            &job.input,
+            input,
             safe_mode,
             dependencies.clone(),
         ));
 
-    for attribute in &cli.attributes {
+    for attribute in &common.attributes {
         parser = apply_attribute(parser, attribute);
     }
 
     let document = parser.parse(&source);
     let counts = reporter.report(&document, &display_name);
     let html = render::render(&document, options);
+
+    Ok(Outcome {
+        html,
+        counts,
+        dependencies: dependencies.snapshot(),
+    })
+}
+
+/// Render one document and put it where the job says.
+pub fn run(
+    job: &Job,
+    common: &CommonArgs,
+    options: &Options,
+    reporter: Reporter,
+) -> Result<Outcome> {
+    let outcome = render_file(&job.input, common, options, reporter)?;
+    let html = &outcome.html;
 
     match &job.destination {
         Destination::Stdout => {
@@ -155,14 +187,11 @@ pub fn run(job: &Job, cli: &Cli, options: &Options, reporter: &Reporter) -> Resu
                     .with_context(|| format!("creating `{}`", parent.display()))?;
             }
 
-            fs::write(path, &html).with_context(|| format!("writing `{}`", path.display()))?;
+            fs::write(path, html).with_context(|| format!("writing `{}`", path.display()))?;
         }
     }
 
-    Ok(Outcome {
-        counts,
-        dependencies: dependencies.snapshot(),
-    })
+    Ok(outcome)
 }
 
 /// Apply one `-a` argument, in any of the forms the Asciidoctor CLI accepts.

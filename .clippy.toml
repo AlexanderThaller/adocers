@@ -1,4 +1,6 @@
 allow-dbg-in-tests = true
+# Product names that appear in prose; ".." keeps clippy's own defaults.
+doc-valid-idents = ["AsciiDoc", "Asciidoctor", ".."]
 allow-unwrap-in-tests = true
 disallowed-methods = [
   { path = "str::eq_ignore_ascii_case", reason = "Always use unicode methods." },

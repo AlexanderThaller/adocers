@@ -1,5 +1,7 @@
 //! Table rendering.
 
+use std::fmt::Write as _;
+
 use asciidoc_parser::blocks::{
     Block,
     ColumnStyle,
@@ -18,13 +20,14 @@ use asciidoc_parser::blocks::{
 
 use crate::render::{
     Renderer,
+    block,
     html::escape_attr,
 };
 
 impl<'src> Renderer<'src> {
     /// Render a `|===` table.
     pub(super) fn table_block(&mut self, block: &'src Block<'src>, table: &'src TableBlock<'src>) {
-        let mut classes = self.wrapper_classes(block, "tableblock");
+        let mut classes = block::wrapper_classes(block, "tableblock");
         classes.push(frame_class(table.frame()));
         classes.push(grid_class(table.grid()));
 
@@ -44,15 +47,15 @@ impl<'src> Renderer<'src> {
         let mut open = String::from("<table");
 
         if let Some(id) = block.id() {
-            open.push_str(&format!(" id=\"{}\"", escape_attr(id)));
+            let _ = write!(open, " id=\"{}\"", escape_attr(id));
         }
 
-        open.push_str(&format!(" class=\"{}\"", escape_attr(&classes.join(" "))));
+        let _ = write!(open, " class=\"{}\"", escape_attr(&classes.join(" ")));
 
         // An explicit `[width=NN%]` narrows the table; autowidth lets the
         // browser size it from the content instead.
         if let Some(width) = table.width().filter(|_| !table.is_autowidth()) {
-            open.push_str(&format!(" style=\"width: {width}%;\""));
+            let _ = write!(open, " style=\"width: {width}%;\"");
         }
 
         open.push('>');
@@ -111,7 +114,7 @@ impl<'src> Renderer<'src> {
             if table.is_autowidth() || total == 0 || column.is_autowidth() {
                 self.out.line("<col>");
             } else {
-                let percent = (column.width() as f64) * 100.0 / (total as f64);
+                let percent = percentage(column.width(), total);
                 self.out.line(&format!(
                     "<col style=\"width: {}%;\">",
                     trim_percent(percent)
@@ -154,11 +157,11 @@ impl<'src> Renderer<'src> {
         );
 
         if cell.colspan() > 1 {
-            open.push_str(&format!(" colspan=\"{}\"", cell.colspan()));
+            let _ = write!(open, " colspan=\"{}\"", cell.colspan());
         }
 
         if cell.rowspan() > 1 {
-            open.push_str(&format!(" rowspan=\"{}\"", cell.rowspan()));
+            let _ = write!(open, " rowspan=\"{}\"", cell.rowspan());
         }
 
         open.push('>');
@@ -268,7 +271,7 @@ fn halign(cell: HorizontalAlignment, column: Option<&TableColumn>) -> &'static s
     match alignment {
         HorizontalAlignment::Center => "center",
         HorizontalAlignment::Right => "right",
-        _ => "left",
+        HorizontalAlignment::Left => "left",
     }
 }
 
@@ -283,8 +286,20 @@ fn valign(cell: VerticalAlignment, column: Option<&TableColumn>) -> &'static str
     match alignment {
         VerticalAlignment::Middle => "middle",
         VerticalAlignment::Bottom => "bottom",
-        _ => "top",
+        VerticalAlignment::Top => "top",
     }
+}
+
+/// One column's share of the total column width, as a percentage.
+///
+/// The widths come from a table's `cols` spec, so they are small integers that
+/// convert to `f64` exactly; a nonsensically large one saturates rather than
+/// silently losing precision.
+fn percentage(width: usize, total: usize) -> f64 {
+    let width = u32::try_from(width).unwrap_or(u32::MAX);
+    let total = u32::try_from(total).unwrap_or(u32::MAX);
+
+    f64::from(width) * 100.0 / f64::from(total)
 }
 
 /// Format a column width, dropping the trailing zeros a fixed precision leaves.

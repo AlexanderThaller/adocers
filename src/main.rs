@@ -5,6 +5,8 @@ mod diagnostics;
 mod includes;
 mod job;
 mod render;
+#[cfg(feature = "serve")]
+mod serve;
 mod watch;
 
 use std::{
@@ -22,6 +24,9 @@ use crate::{
     cli::{
         Cli,
         ColorChoice,
+        Command,
+        CommonArgs,
+        RenderArgs,
     },
     diagnostics::Reporter,
     render::Options,
@@ -30,7 +35,15 @@ use crate::{
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    match run(&cli) {
+    let result = match cli.command {
+        None => render(&cli.render),
+        Some(Command::Render(args)) => render(&args),
+
+        #[cfg(feature = "serve")]
+        Some(Command::Serve(args)) => serve::run(&args).map(|()| ExitCode::SUCCESS),
+    };
+
+    match result {
         Ok(code) => code,
 
         Err(error) => {
@@ -41,24 +54,24 @@ fn main() -> ExitCode {
 }
 
 /// Render every requested document, then optionally keep watching.
-fn run(cli: &Cli) -> Result<ExitCode> {
-    let jobs = job::plan(cli)?;
-    let options = options(cli)?;
-    let reporter = reporter(cli);
+fn render(args: &RenderArgs) -> Result<ExitCode> {
+    let jobs = job::plan(args)?;
+    let options = options(&args.common, args.fragment)?;
+    let reporter = reporter(&args.common);
 
-    if cli.watch {
-        watch::run(&jobs, cli, &options, &reporter)?;
+    if args.watch {
+        watch::run(&jobs, &args.common, &options, reporter)?;
         return Ok(ExitCode::SUCCESS);
     }
 
     let mut warnings = 0;
 
     for job in &jobs {
-        let outcome = job::run(job, cli, &options, &reporter)?;
+        let outcome = job::run(job, &args.common, &options, reporter)?;
         warnings += outcome.counts.warnings;
     }
 
-    if cli.deny_warnings && warnings > 0 {
+    if args.deny_warnings && warnings > 0 {
         eprintln!("adocers: {warnings} warning(s) reported and `--deny-warnings` is in effect");
 
         return Ok(ExitCode::FAILURE);
@@ -67,41 +80,43 @@ fn run(cli: &Cli) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Decide how the rendered body should be wrapped and styled.
-fn options(cli: &Cli) -> Result<Options> {
-    if cli.fragment {
+/// Decide how a rendered body should be wrapped and styled.
+pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
+    if fragment {
         return Ok(Options {
             fragment: true,
             stylesheet: None,
+            body_suffix: String::new(),
         });
     }
 
-    let stylesheet = match &cli.css {
+    let stylesheet = match &common.css {
         Some(path) => Some(
             std::fs::read_to_string(path)
                 .with_context(|| format!("reading stylesheet `{}`", path.display()))?,
         ),
 
-        None if cli.no_css => None,
+        None if common.no_css => None,
         None => Some(render::default_stylesheet()),
     };
 
     Ok(Options {
         fragment: false,
         stylesheet,
+        body_suffix: String::new(),
     })
 }
 
 /// Configure diagnostic output for this run.
-fn reporter(cli: &Cli) -> Reporter {
+pub(crate) fn reporter(common: &CommonArgs) -> Reporter {
     Reporter {
-        color: match cli.color {
+        color: match common.color {
             ColorChoice::Always => true,
             ColorChoice::Never => false,
             ColorChoice::Auto => std::io::stderr().is_terminal(),
         },
 
-        verbose: cli.verbose,
-        quiet: cli.quiet,
+        verbose: common.verbose,
+        quiet: common.quiet,
     }
 }

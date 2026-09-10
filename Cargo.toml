@@ -5,12 +5,36 @@ edition = "2024"
 description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
 license = "MIT OR Apache-2.0"
 
+[features]
+default = ["serve"]
+serve = ["dep:axum", "dep:tokio", "dep:tokio-util"]
+
 [dependencies]
-anyhow = "1.0.104"
-ariadne = "0.6.0"
-asciidoc-parser = "0.31.1"
-clap = { version = "4.6.6", features = ["derive"] }
-notify-debouncer-full = "0.7.0"
+anyhow = "1"
+ariadne = "0.6"
+asciidoc-parser = "0.31"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"], optional = true }
+clap = { version = "4", features = ["derive"] }
+notify-debouncer-full = "0.7"
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "fs", "time", "sync"], optional = true }
+tokio-util = { version = "0.7", default-features = false, features = ["io"], optional = true }
+
+[lints.rust]
+#missing-docs = "warn"
+missing-debug-implementations = "warn"
+rust-2018-idioms = "warn"
+unsafe-code = "forbid"
+unused-lifetimes = "warn"
+
+[lints.clippy]
+allow-attributes = "warn"
+allow-attributes-without-reason = "warn"
+dbg-macro = "warn"
+pedantic = { level = "warn", priority = -1 }
+todo = "warn"
+unwrap-used = "warn"
+missing-panics-doc = "allow"
+missing-errors-doc = "allow"
 
 [profile.release]
 strip = true

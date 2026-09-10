@@ -28,6 +28,11 @@ use crate::render::{
 
 impl<'src> Renderer<'src> {
     /// Render one block and everything beneath it.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "the arms that produce nothing do so for different reasons, and saying which is \
+                  the point of listing them separately"
+    )]
     pub(super) fn block(&mut self, block: &'src Block<'src>) {
         match block {
             Block::Simple(simple) => self.simple_block(block, simple),
@@ -78,17 +83,9 @@ impl<'src> Renderer<'src> {
             .line(&format!("<div class=\"title\">{caption}{title}</div>"));
     }
 
-    /// The class list for a block wrapper: the context class first, then any
-    /// roles the author attached.
-    pub(super) fn wrapper_classes(&self, block: &'src Block<'src>, context: &str) -> Vec<String> {
-        let mut classes = vec![context.to_string()];
-        classes.extend(block.roles().into_iter().map(str::to_string));
-        classes
-    }
-
     /// Open a block wrapper `<div>` with the block's id and class list.
     pub(super) fn open_wrapper(&mut self, block: &'src Block<'src>, context: &str) {
-        let classes = self.wrapper_classes(block, context);
+        let classes = wrapper_classes(block, context);
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
@@ -191,11 +188,7 @@ impl<'src> Renderer<'src> {
     fn section_block(&mut self, block: &'src Block<'src>, section: &'src SectionBlock<'src>) {
         let level = section.level();
         let heading = format!("h{}", (level + 1).min(6));
-        let title = format!(
-            "{}{}",
-            self.section_prefix(section),
-            section.section_title()
-        );
+        let title = format!("{}{}", section_prefix(section), section.section_title());
 
         if section.section_type() == SectionType::Discrete {
             // A discrete heading is a heading and nothing else: it owns no body
@@ -218,7 +211,7 @@ impl<'src> Renderer<'src> {
         // The id goes on the heading, which is what a link to the section
         // should scroll to; putting it on the wrapper as well would make the
         // document contain the same id twice.
-        let classes = self.wrapper_classes(block, &format!("sect{level}"));
+        let classes = wrapper_classes(block, &format!("sect{level}"));
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", None, &classes);
@@ -233,21 +226,6 @@ impl<'src> Renderer<'src> {
         }
 
         self.out.close("div");
-    }
-
-    /// The numbering that precedes a section title, if the document numbers
-    /// sections.
-    fn section_prefix(&self, section: &'src SectionBlock<'src>) -> String {
-        // An appendix carries a full caption ("Appendix A: "); an ordinary
-        // numbered section carries only its number.
-        if let Some(caption) = section.caption() {
-            return caption.to_string();
-        }
-
-        match section.section_number() {
-            Some(number) => format!("{number}. "),
-            None => String::new(),
-        }
     }
 
     /// The preamble: everything between the document header and the first
@@ -324,9 +302,9 @@ impl<'src> Renderer<'src> {
     /// `[quote]` and `[verse]`, delimited or not.
     fn quote_block(&mut self, block: &'src Block<'src>, quote: &'src QuoteBlock<'src>) {
         let is_verse = quote.type_() == QuoteType::Verse;
-        let context = if is_verse { "verseblock" } else { "quoteblock" };
+        let wrapper = if is_verse { "verseblock" } else { "quoteblock" };
 
-        self.open_wrapper(block, context);
+        self.open_wrapper(block, wrapper);
         self.block_title(block);
 
         if is_verse {
@@ -334,7 +312,7 @@ impl<'src> Renderer<'src> {
             // preformatted rather than flowed.
             let content = quote
                 .content()
-                .map(|c| c.rendered_html())
+                .map(asciidoc_parser::content::Content::rendered_html)
                 .unwrap_or_default();
             self.out
                 .line(&format!("<pre class=\"content\">{content}</pre>"));
@@ -440,6 +418,32 @@ impl<'src> Renderer<'src> {
     }
 }
 
+/// The class list for a block wrapper: the context class first, then any roles
+/// the author attached.
+pub(super) fn wrapper_classes<'src>(block: &'src Block<'src>, context: &str) -> Vec<String> {
+    let mut classes = vec![context.to_string()];
+    classes.extend(block.roles().into_iter().map(str::to_string));
+    classes
+}
+
+/// The numbering that precedes a section title, if the document numbers
+/// sections.
+///
+/// The table of contents shows the same prefix as the heading does, so both
+/// come from here.
+pub(super) fn section_prefix<'src>(section: &'src SectionBlock<'src>) -> String {
+    // An appendix carries a full caption ("Appendix A: "); an ordinary numbered
+    // section carries only its number.
+    if let Some(caption) = section.caption() {
+        return caption.to_string();
+    }
+
+    match section.section_number() {
+        Some(number) => format!("{number}. "),
+        None => String::new(),
+    }
+}
+
 /// The language a listing block declares, from `[source,rust]` or
 /// `[source,language=rust]`.
 fn source_language<'src>(block: &'src Block<'src>) -> Option<&'src str> {
@@ -452,6 +456,6 @@ fn source_language<'src>(block: &'src Block<'src>) -> Option<&'src str> {
     attrlist
         .named_attribute("language")
         .or_else(|| attrlist.nth_attribute(2))
-        .map(|attribute| attribute.value())
+        .map(asciidoc_parser::attributes::ElementAttribute::value)
         .filter(|language| !language.is_empty())
 }
