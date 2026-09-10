@@ -295,7 +295,7 @@ impl Site {
     /// a redirect that is still valid after the round trip. `raw` asks for
     /// a document's source instead of its rendering.
     fn answer(&self, path: &str, encoded_path: &str, query: &str, raw: bool) -> Answer {
-        let Some(target) = self.resolve(path) else {
+        let Some(target) = self.resolve(path).or_else(|| self.document_behind(path)) else {
             return self.not_found(path);
         };
 
@@ -460,6 +460,22 @@ impl Site {
                 &format!("{error:#}"),
             ),
         }
+    }
+
+    /// The document a request for a page that does not exist is really asking
+    /// for.
+    ///
+    /// A cross reference between documents names the page its target becomes:
+    /// `xref:two.adoc[]` links to `two.html`, because that is where a build
+    /// would have put it. Nothing is built here, so a `.html` request that
+    /// names no file is answered with the document it would have been made
+    /// from. A `.html` file that does exist is served as itself — this is only
+    /// reached once the literal path has been tried.
+    fn document_behind(&self, path: &str) -> Option<PathBuf> {
+        document_candidates(path)
+            .into_iter()
+            .find_map(|candidate| self.resolve(&candidate))
+            .filter(|target| target.is_file())
     }
 
     /// Turn a request path into a file inside the served directory.
@@ -652,9 +668,48 @@ fn bind_address(bind: &str) -> String {
     bind.to_string()
 }
 
+/// The documents a request for a page could have been rendered from, in the
+/// order they should be tried.
+///
+/// A request that does not name a page has none: only `.html` is a page a
+/// cross reference would have pointed at.
+fn document_candidates(path: &str) -> Vec<String> {
+    let Some(stem) = path.strip_suffix(".html") else {
+        return Vec::new();
+    };
+
+    mime::DOCUMENT_EXTENSIONS
+        .iter()
+        .map(|extension| format!("{stem}.{extension}"))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn looks_for_the_document_behind_a_page() {
+        assert_eq!(
+            document_candidates("/guide.html"),
+            ["/guide.adoc", "/guide.asciidoc", "/guide.ad", "/guide.asc"]
+        );
+
+        assert_eq!(
+            document_candidates("/sub/guide.html").first().unwrap(),
+            "/sub/guide.adoc"
+        );
+    }
+
+    #[test]
+    fn looks_for_nothing_behind_anything_but_a_page() {
+        for path in ["/guide.adoc", "/logo.png", "/guide", "/", "/a.html.txt"] {
+            assert!(
+                document_candidates(path).is_empty(),
+                "`{path}` should name no document"
+            );
+        }
+    }
 
     #[test]
     fn reads_a_flag_in_every_form_it_is_written() {

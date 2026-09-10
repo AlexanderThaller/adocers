@@ -58,6 +58,10 @@ pub fn of(path: &Path) -> &'static str {
     }
 }
 
+/// The extensions that name an AsciiDoc document, in the order they are tried
+/// when looking for the document behind a requested page.
+pub const DOCUMENT_EXTENSIONS: &[&str] = &["adoc", "asciidoc", "ad", "asc"];
+
 /// Whether a file is AsciiDoc, and so should be rendered rather than served.
 ///
 /// `.txt` is AsciiDoc as far as the `include::` directive is concerned, but a
@@ -68,9 +72,8 @@ pub fn is_asciidoc(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
-            matches!(
-                extension.to_lowercase().as_str(),
-                "adoc" | "asciidoc" | "ad" | "asc"
-            )
+            let extension = extension.to_lowercase();
+
+            DOCUMENT_EXTENSIONS.contains(&extension.as_str())
         })
 }

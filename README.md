@@ -90,6 +90,13 @@ stylesheets, fonts, PDFs — is served as it is, with a content type guessed fro
 its extension. `.txt` is served as text rather than rendered, even though the
 `include::` directive treats it as AsciiDoc.
 
+A cross reference between documents names the page its target *becomes*, so
+`xref:guide.adoc[]` links to `guide.html` — which is right for a rendered
+directory and names nothing here, since nothing is built ahead of time. A
+request for a `.html` file that does not exist is therefore answered with the
+document it would have been made from, so those links work while you are
+reading. A `.html` file that does exist is served as itself.
+
 ### Reading the source
 
 Adding `raw` to the query serves a document's source as plain text instead of
