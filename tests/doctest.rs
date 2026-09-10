@@ -28,12 +28,6 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // Lists: a plain item inside a checklist is given a glyph it should not
-    // have, two numeration styles are unrecognized, and a horizontal list
-    // ignores its column widths.
-    "dlist__horizontal-with-dimensions",
-    "olist__with-numeration-styles",
-    "ulist__checklist",
     // The `toc::[]` macro ignores its own attributes — its id, its role, its
     // title and its levels — `#toctitle` is missing a class, and
     // `:toc: preamble` closes a div too early.

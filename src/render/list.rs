@@ -67,7 +67,11 @@ impl<'src> Renderer<'src> {
 
     /// `. item`, numbered in the style the marker implies.
     fn ordered_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let style = list.marker_style().unwrap_or("arabic");
+        // A declared style says outright how the list is numbered; the marker's
+        // depth is only the fallback for a list that did not say.
+        let style = numeration_style(block)
+            .or_else(|| list.marker_style())
+            .unwrap_or("arabic");
 
         let wrapper = block::wrapper_classes(block, &["olist", style]);
 
@@ -160,6 +164,19 @@ impl<'src> Renderer<'src> {
         self.open_wrapper(block, "hdlist");
         self.block_title(block);
         self.out.line("<table>");
+
+        // `labelwidth` and `itemwidth` size the two columns. Either alone is
+        // enough to fix the table's shape; the other column is then the
+        // browser's to measure.
+        let label = column_width(block, "labelwidth");
+        let item = column_width(block, "itemwidth");
+
+        if label.is_some() || item.is_some() {
+            self.out.line("<colgroup>");
+            self.out.line(&col(label.as_deref()));
+            self.out.line(&col(item.as_deref()));
+            self.out.close("colgroup");
+        }
 
         for item in list_items(list) {
             self.out.line("<tr>");
@@ -264,11 +281,51 @@ fn checkbox_marker(item: &ListItem<'_>, is_checklist: bool) -> Option<&'static s
         return None;
     }
 
-    // An item without a `[ ]` marker inside a checklist still lines up with its
-    // siblings if it is given the unchecked box.
-    Some(match item.checkbox() {
-        Some(true) => "&#10003;",
-        _ => "&#10063;",
+    // Only an item that carries a checkbox gets a box drawn for it. An item
+    // written without one is an ordinary item that happens to share the list,
+    // and marking it unchecked would say something the author did not.
+    match item.checkbox() {
+        Some(true) => Some("&#10003;"),
+        Some(false) => Some("&#10063;"),
+        None => None,
+    }
+}
+
+/// A `[horizontal]` list's column width, as a percentage without its sign.
+///
+/// The author may write either `labelwidth=20` or `labelwidth="20%"`; both mean
+/// the same fifth of the table.
+fn column_width<'src>(block: &'src Block<'src>, name: &str) -> Option<String> {
+    let width = block
+        .attrlist()?
+        .named_attribute(name)
+        .map(asciidoc_parser::attributes::ElementAttribute::value)
+        .filter(|width| !width.is_empty())?;
+
+    Some(width.trim_end_matches('%').to_string())
+}
+
+/// One `<col>`, sized when there is a width for it.
+fn col(width: Option<&str>) -> String {
+    match width {
+        Some(width) => format!("<col style=\"width: {}%;\">", escape_attr(width)),
+        None => "<col>".to_string(),
+    }
+}
+
+/// The numbering an ordered list declared for itself, if it declared one.
+fn numeration_style<'src>(block: &'src Block<'src>) -> Option<&'src str> {
+    block.declared_style().filter(|style| {
+        matches!(
+            *style,
+            "arabic"
+                | "decimal"
+                | "loweralpha"
+                | "upperalpha"
+                | "lowerroman"
+                | "upperroman"
+                | "lowergreek"
+        )
     })
 }
 
