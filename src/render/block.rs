@@ -601,8 +601,35 @@ impl<'src> Renderer<'src> {
         block: &'src Block<'src>,
         compound: &'src CompoundDelimitedBlock<'src>,
     ) {
-        match compound.context_kind() {
-            CompoundDelimitedContext::Example => {
+        // A `--` block can be told to take another block's shape. The parser
+        // routes most of those masquerades itself; the ones that arrive here
+        // still wearing `Open` are handled below.
+        let masquerade = match compound.context_kind() {
+            CompoundDelimitedContext::Open => block.declared_style(),
+            _ => None,
+        };
+
+        match (compound.context_kind(), masquerade) {
+            (_, Some("sidebar")) | (CompoundDelimitedContext::Sidebar, _) => {
+                self.sidebar_block(block, compound);
+            }
+
+            (_, Some("abstract")) => {
+                // An abstract is set like a quotation rather than like an open
+                // block, which is the one masquerade that reaches for a shape
+                // no other style has.
+                let classes = wrapper_classes(block, &["quoteblock", "abstract"]);
+                let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+                self.out.open("div", block.id(), &classes);
+                self.block_title(block);
+                self.out.line("<blockquote>");
+                self.blocks(compound.child_blocks());
+                self.out.line("</blockquote>");
+                self.out.close("div");
+            }
+
+            (_, Some("example")) | (CompoundDelimitedContext::Example, _) => {
                 // `%collapsible` turns an example into a disclosure widget, and
                 // its title becomes the summary rather than a heading above it.
                 if block.has_option("collapsible") {
@@ -635,33 +662,15 @@ impl<'src> Renderer<'src> {
                 self.out.close("div");
             }
 
-            CompoundDelimitedContext::Sidebar => {
-                // A sidebar's title lives inside its content box, not above it.
-                self.open_wrapper(block, "sidebarblock");
-                self.out.open("div", None, &["content"]);
-                self.block_title(block);
-                self.blocks(compound.child_blocks());
-                self.out.close("div");
-                self.out.close("div");
-            }
-
-            CompoundDelimitedContext::Open if block.declared_style() == Some("abstract") => {
-                // An abstract is set like a quotation rather than like an open
-                // block, which is the one style that changes an open block's
-                // shape entirely.
-                let classes = wrapper_classes(block, &["quoteblock", "abstract"]);
+            _ => {
+                // Any other style is a name the author gave this block, which
+                // becomes a class on it: `[partintro]` and `[normal]` are the
+                // ones AsciiDoc defines, and a stylesheet may know others.
+                let classes =
+                    wrapper_classes(block, &["openblock", masquerade.unwrap_or_default()]);
                 let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
                 self.out.open("div", block.id(), &classes);
-                self.block_title(block);
-                self.out.line("<blockquote>");
-                self.blocks(compound.child_blocks());
-                self.out.line("</blockquote>");
-                self.out.close("div");
-            }
-
-            CompoundDelimitedContext::Open => {
-                self.open_wrapper(block, "openblock");
                 self.block_title(block);
                 self.out.open("div", None, &["content"]);
                 self.blocks(compound.child_blocks());
@@ -669,6 +678,21 @@ impl<'src> Renderer<'src> {
                 self.out.close("div");
             }
         }
+    }
+
+    /// `<div class="sidebarblock">`, whose title lives inside its content box
+    /// rather than above it.
+    fn sidebar_block(
+        &mut self,
+        block: &'src Block<'src>,
+        compound: &'src CompoundDelimitedBlock<'src>,
+    ) {
+        self.open_wrapper(block, "sidebarblock");
+        self.out.open("div", None, &["content"]);
+        self.block_title(block);
+        self.blocks(compound.child_blocks());
+        self.out.close("div");
+        self.out.close("div");
     }
 }
 
