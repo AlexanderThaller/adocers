@@ -2,3 +2,4 @@
 
 # The showcase is a source document; its rendering is not checked in.
 /resources/*.html
+/resources/adocers-assets/

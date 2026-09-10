@@ -69,10 +69,12 @@ pub struct CommonArgs {
     #[arg(long = "no-icons", global = true)]
     pub no_icons: bool,
 
-    /// Where the browser fetches mermaid from to draw diagrams.
+    /// Load mermaid from this URL instead of the copy built into this binary.
     ///
-    /// Point this at a copy you host yourself to render pages that must work
-    /// without reaching the network.
+    /// It has to be a UMD build — one that defines `window.mermaid` — such as
+    /// `https://cdn.jsdelivr.net/npm/mermaid@12/dist/mermaid.min.js`. Without
+    /// this flag no page reaches the network: the server hands out its own
+    /// copy, and a file render writes one beside the page.
     #[arg(long, value_name = "URL", conflicts_with = "no_mermaid", global = true)]
     pub mermaid_url: Option<String>,
 

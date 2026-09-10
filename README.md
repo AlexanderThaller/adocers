@@ -48,7 +48,7 @@ adocers -o - doc.adoc       # writes to standard output
 | `--no-css` | Emit the page unstyled. |
 | `-a, --attribute <NAME[=VALUE]>` | Set a document attribute. `NAME`, `NAME=VALUE`, `NAME!` and `!NAME` all work, and the document cannot override them. Repeatable. |
 | `--no-icons` | Mark admonitions with their label instead of an icon. |
-| `--mermaid-url <URL>` | Where the browser fetches mermaid from. Point it at a copy you host to work offline. |
+| `--mermaid-url <URL>` | Load mermaid from this URL instead of the built-in copy. Must be a UMD build. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
 | `-w, --watch` | Re-render on change; see below. |
@@ -230,11 +230,21 @@ that puts a build dependency in the way of what is otherwise a self-contained
 binary. It also degrades honestly: a reader with no scripts sees the source of
 the diagram rather than a gap.
 
-The drawing module is fetched from a CDN, and only by a page that actually has a
-diagram on it. `--mermaid-url` points at a copy you host yourself, and
-`--no-mermaid` leaves diagrams as the listing blocks they were written as. A
-`--fragment` keeps the diagram markup but never the script — the page it is
-embedded in owns what it loads.
+Mermaid itself is vendored — `vendor/mermaid/`, compiled into the binary — so a
+rendered page reaches no further than the machine that rendered it. It is
+delivered three ways, depending on where the page is going:
+
+| Output | Where the page gets mermaid |
+| --- | --- |
+| `serve` | The server's own `/__adocers/mermaid/…`, cached indefinitely since the name carries the version. |
+| A file | `adocers-assets/mermaid-<version>.min.js`, written beside the page. Documents sharing a directory share one copy. |
+| Standard output | The page carries the module itself; there is nowhere to put a file beside it. |
+
+Only a page that actually has a diagram gets any of this. `--mermaid-url` loads
+from somewhere else instead — it must be a UMD build, one that defines
+`window.mermaid` — and `--no-mermaid` leaves diagrams as the listing blocks they
+were written as. A `--fragment` keeps the diagram markup but never the script:
+the page it is embedded in owns what it loads.
 
 Diagrams follow the reader's colour scheme, and are redrawn if it changes, since
 mermaid bakes the theme into the SVG it produces. A diagram is shown at the size

@@ -35,6 +35,7 @@ use crate::{
     render::{
         self,
         Options,
+        diagram,
     },
 };
 
@@ -63,6 +64,10 @@ pub struct Job {
 pub struct Outcome {
     /// The rendered HTML.
     pub html: String,
+
+    /// Whether the document held a diagram, and so needs the drawing module
+    /// within reach of the page.
+    pub diagrams: bool,
 
     /// Diagnostics reported for the document.
     pub counts: Counts,
@@ -153,10 +158,11 @@ pub fn render_file(
 
     let document = parser.parse(&source);
     let counts = reporter.report(&document, &display_name);
-    let html = render::render(&document, options);
+    let rendered = render::render(&document, options);
 
     Ok(Outcome {
-        html,
+        html: rendered.html,
+        diagrams: rendered.diagrams,
         counts,
         dependencies: dependencies.snapshot(),
     })
@@ -169,7 +175,8 @@ pub fn run(
     options: &Options,
     reporter: Reporter,
 ) -> Result<Outcome> {
-    let outcome = render_file(&job.input, common, options, reporter)?;
+    let options = destination_options(options, &job.destination, common);
+    let outcome = render_file(&job.input, common, &options, reporter)?;
     let html = &outcome.html;
 
     match &job.destination {
@@ -188,10 +195,62 @@ pub fn run(
             }
 
             fs::write(path, html).with_context(|| format!("writing `{}`", path.display()))?;
+
+            if outcome.diagrams && crate::uses_vendored_mermaid(common) {
+                write_asset(path)?;
+            }
         }
     }
 
     Ok(outcome)
+}
+
+/// Adjust the render options for where the page is going.
+///
+/// A page written to a file can reach a copy of the drawing module written
+/// beside it, which is what the options already say. A page written to standard
+/// output cannot: there is no directory to put anything in, and the caller is
+/// about to send the markup somewhere this tool knows nothing about. That page
+/// carries the module itself.
+fn destination_options(
+    options: &Options,
+    destination: &Destination,
+    common: &CommonArgs,
+) -> Options {
+    if !matches!(destination, Destination::Stdout) || !crate::uses_vendored_mermaid(common) {
+        return options.clone();
+    }
+
+    Options {
+        mermaid: Some(diagram::Source::Inline),
+        ..options.clone()
+    }
+}
+
+/// Write the vendored drawing module beside a rendered page.
+///
+/// The file name carries mermaid's version, so several pages in one directory
+/// share one copy and an upgrade lands beside the old one rather than on top of
+/// a copy a browser may still be holding.
+fn write_asset(page: &Path) -> Result<()> {
+    let directory = page
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+        .join(diagram::ASSET_DIR);
+
+    let asset = directory.join(diagram::BUNDLE_FILE);
+
+    // The bundle never changes under a given name, so a second document in the
+    // same directory has nothing to add.
+    if asset.is_file() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&directory)
+        .with_context(|| format!("creating `{}`", directory.display()))?;
+
+    fs::write(&asset, diagram::BUNDLE).with_context(|| format!("writing `{}`", asset.display()))
 }
 
 /// Apply one `-a` argument, in any of the forms the Asciidoctor CLI accepts.

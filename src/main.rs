@@ -29,7 +29,13 @@ use crate::{
         RenderArgs,
     },
     diagnostics::Reporter,
-    render::Options,
+    render::{
+        Options,
+        diagram::{
+            self,
+            Source,
+        },
+    },
 };
 
 fn main() -> ExitCode {
@@ -114,17 +120,29 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
 }
 
 /// Where diagrams are drawn from, or `None` when they are not to be drawn.
-fn mermaid(common: &CommonArgs) -> Option<String> {
+///
+/// Without `--mermaid-url` this names the copy vendored into this binary, at
+/// the path a file render writes it to. Whoever is producing the page — the
+/// file writer, or the server — replaces that with the path its own reader
+/// will be able to reach; see [`uses_vendored_mermaid`].
+fn mermaid(common: &CommonArgs) -> Option<Source> {
     if common.no_mermaid {
         return None;
     }
 
-    Some(
-        common
-            .mermaid_url
-            .clone()
-            .unwrap_or_else(render::default_mermaid_url),
-    )
+    Some(Source::Url(match &common.mermaid_url {
+        Some(url) => url.clone(),
+        None => diagram::ASSET_HREF.to_string(),
+    }))
+}
+
+/// Whether diagrams are drawn from the vendored copy rather than a URL the
+/// author named.
+///
+/// Only then does the caller have to put that copy somewhere the page can
+/// reach: beside it on disk, or behind the server's own reserved path.
+pub(crate) fn uses_vendored_mermaid(common: &CommonArgs) -> bool {
+    !common.no_mermaid && common.mermaid_url.is_none()
 }
 
 /// Configure diagnostic output for this run.

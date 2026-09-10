@@ -8,7 +8,7 @@
 
 mod block;
 mod css;
-mod diagram;
+pub mod diagram;
 mod html;
 mod icons;
 mod list;
@@ -51,18 +51,26 @@ pub struct Options {
     /// Whether an admonition is marked with an icon rather than its label.
     pub icons: bool,
 
-    /// Where the browser fetches mermaid from to draw diagrams, or `None` to
-    /// render a diagram as the listing block it was written as.
+    /// Where the page gets the drawing module, or `None` to render a diagram
+    /// as the listing block it was written as.
     ///
     /// A fragment still carries its diagrams' markup but never the script: the
     /// page it is embedded in owns what it loads.
-    pub mermaid: Option<String>,
+    pub mermaid: Option<diagram::Source>,
 }
 
-/// Where the browser fetches mermaid from when the caller names no other.
-#[must_use]
-pub fn default_mermaid_url() -> String {
-    diagram::DEFAULT_URL.to_string()
+/// What a render produced.
+#[derive(Clone, Debug)]
+pub struct Rendered {
+    /// The markup.
+    pub html: String,
+
+    /// Whether the document turned out to hold a diagram.
+    ///
+    /// The caller needs this to know whether the drawing module has to be
+    /// reachable from the page — whether to write it beside the page, in the
+    /// case of a file render — and it is not known until the body is rendered.
+    pub diagrams: bool,
 }
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
@@ -71,7 +79,7 @@ pub fn default_stylesheet() -> String {
 }
 
 /// Render `document` to HTML.
-pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> String {
+pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> Rendered {
     let mut renderer = Renderer {
         document,
         options,
@@ -81,12 +89,15 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> S
     };
 
     let body = renderer.body();
+    let diagrams = renderer.diagrams;
 
-    if options.fragment {
+    let html = if options.fragment {
         body
     } else {
-        document_page(document, options, &body, renderer.diagrams)
-    }
+        document_page(document, options, &body, diagrams)
+    };
+
+    Rendered { html, diagrams }
 }
 
 /// Walks the block tree, appending markup as it goes.
@@ -435,9 +446,9 @@ fn document_page(document: &Document<'_>, options: &Options, body: &str, diagram
         .doctitle_sanitized()
         .unwrap_or_else(|| "Untitled".to_string());
 
-    // The drawing module is fetched only by a page that has something to draw.
-    let body_suffix = match options.mermaid.as_deref().filter(|_| diagrams) {
-        Some(url) => format!("{}\n{}", diagram::script(url), options.body_suffix),
+    // The drawing module is delivered only to a page that has something to draw.
+    let body_suffix = match options.mermaid.as_ref().filter(|_| diagrams) {
+        Some(source) => format!("{}\n{}", diagram::script(source), options.body_suffix),
         None => options.body_suffix.clone(),
     };
 
