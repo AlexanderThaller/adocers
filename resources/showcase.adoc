@@ -458,6 +458,53 @@ special.
 |Total | |3
 |===
 
+The footer row above leaves its middle cell empty. An empty cell is still a
+cell: it keeps its borders and its place in the row, and simply holds nothing.
+
+=== Columns
+
+The numbers in `cols` are relative, not percentages: `1,2,1` gives the middle
+column half the table and the outer two a quarter each, and `2,4,2` says the
+same thing. They are turned into percentages to four decimal places and then
+made to add up, with the last column taking whatever the rounding left over, so
+three equal columns come to exactly 100% rather than a hair under it.
+
+`N*` repeats a spec. `cols="4*"` is four equal columns, and a spec written
+after the `*` applies to all of them.
+
+A column can carry its own alignment: `<` `^` `>` place the content left,
+centre and right, and `.<` `.^` `.>` place it top, middle and bottom.
+
+[source,asciidoc]
+----
+[cols="<1,^1,>1,.^1"]
+----
+
+.Alignment declared once per column rather than on every cell
+[cols="<1,^1,>1,.^1"]
+|===
+|Left, the default |Centred |Right |Middle
+
+|A cell's own specifier still wins over its column's.
+^|centred anyway
+|.
+|Vertically centred against the tall cell beside it.
+|===
+
+A `~` column is measured by the browser from what is in it. The numbers beside
+it stop being shares of the table and become the percentages they are written
+as, since there is no longer a whole for them to be shares of:
+
+.One column left to the browser
+[cols="20,~,20"]
+|===
+|20% |Whatever is left |20%
+
+|Fixed |Measured from its content |Fixed
+|===
+
+=== Cells
+
 Cells carry a specifier before the `|`. `^` `>` `<` align the content, `2+`
 spans two columns, `.2+` spans two rows, and a letter picks the cell style:
 `e` emphasis, `s` strong, `m` monospace, `l` literal, `h` header.
@@ -488,7 +535,37 @@ a|
 NOTE: And an admonition.
 |===
 
-`[%autowidth]` sizes a table to its content instead of the page:
+=== Frame, grid and width
+
+`frame` draws the border around a table — `all`, `ends`, `sides` or `none` —
+and `grid` draws the rules between its cells: `all`, `rows`, `cols` or `none`.
+Between them they decide how much of a grid a table looks like.
+
+.`frame=sides` with `grid=cols`, so the rules all run one way
+[frame=sides,grid=cols,cols="1,1,1"]
+|===
+|one |two |three
+|four |five |six
+|===
+
+.`frame=none` with `grid=none`, which is a layout rather than a table
+[frame=none,grid=none,cols="1,1,1"]
+|===
+|one |two |three
+|four |five |six
+|===
+
+A table fills the page unless it is told not to. `[width=NN%]` sets how much of
+it to take:
+
+.`[width=40%]`
+[width=40%]
+|===
+|Narrow |Table
+|===
+
+`[%autowidth]` sizes a table to its content instead of the page, which suits a
+short table of terms:
 
 [%autowidth]
 |===
@@ -496,6 +573,53 @@ NOTE: And an admonition.
 
 |`--fragment` |Body only
 |`--watch` |Re-render on change
+|===
+
+`stripes` shades alternating rows — `even`, `odd`, `all`, `hover` or `none` —
+and `caption` replaces the label in front of a table's title.
+
+.A table numbered by hand
+[stripes=odd,caption="Figure B. ",cols="1,1"]
+|===
+|`stripes=odd` |shades the first row
+|`caption=` |replaces `Table 1. `
+|===
+
+=== Data as a table
+
+A table's rows do not have to be written as AsciiDoc. `format=csv` reads them
+as comma-separated values, which is what a spreadsheet or a query already
+gives you:
+
+[source,asciidoc]
+------
+[format=csv,options=header,cols="2,1,1"]
+|===
+Grammar,Extensions,Injected
+Rust,rs,no
+HTML,"html,htm",yes
+|===
+------
+
+.Comma-separated rows
+[format=csv,options=header,cols="2,1,1"]
+|===
+Grammar,Extensions,Injected
+Rust,rs,no
+HTML,"html,htm",yes
+Markdown,"md,markdown",no
+|===
+
+Quoting a field is how a value keeps a comma of its own, as `"html,htm"` does
+above. `format=dsv` splits on `:` instead, and `separator=` names any other
+character:
+
+.Colon-separated rows, the format `/etc/passwd` is written in
+[format=dsv,options=header,cols="1,1,2"]
+|===
+Field:Kind:Meaning
+1:name:The account name
+2:uid:Its numeric id
 |===
 
 == Images and media
