@@ -28,11 +28,10 @@
 //! those back in would mean rewriting its output rather than configuring it.
 //!
 //! It is worth revisiting if that changes — or if the long tail of Asciidoctor
-//! fidelity becomes more work than it is worth. Until then it is useful as an
-//! oracle: `asciidoctor` itself is the better one, and the fidelity fixes it
-//! turned up (the column widths that add up to exactly 100%, the footer's
-//! version line, the `<details>` that carries its own id) came from diffing
-//! against it.
+//! fidelity becomes more work than it is worth. That tail is now measured
+//! rather than guessed at: `tests/doctest.rs` renders Asciidoctor's own test
+//! corpus through this back end and compares the result against Asciidoctor's,
+//! and `KNOWN_FAILURES` there is the whole of what does not match yet.
 
 mod block;
 mod callout;
