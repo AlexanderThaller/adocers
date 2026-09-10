@@ -86,6 +86,18 @@ pub struct CommonArgs {
     #[arg(long = "no-mermaid", global = true)]
     pub no_mermaid: bool,
 
+    /// Load `MathJax` from this URL instead of the copy built into this binary.
+    ///
+    /// It has to be a `MathJax` 3 build that defines `window.MathJax`, and
+    /// `AsciiMath` needs `input/asciimath.js` to sit beside it — which is how
+    /// `MathJax` itself is published, so a CDN copy works as it is.
+    #[arg(long, value_name = "URL", conflicts_with = "no_math", global = true)]
+    pub mathjax_url: Option<String>,
+
+    /// Show equations as the notation they were written in.
+    #[arg(long = "no-math", global = true)]
+    pub no_math: bool,
+
     /// How far a document may reach outside itself.
     #[arg(long, value_enum, default_value_t = SafeMode::Unsafe, value_name = "MODE", global = true)]
     pub safe_mode: SafeMode,

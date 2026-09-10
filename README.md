@@ -51,6 +51,8 @@ adocers -o - doc.adoc       # writes to standard output
 | `--no-highlight` | Leave source blocks unhighlighted. |
 | `--mermaid-url <URL>` | Load mermaid from this URL instead of the built-in copy. Must be a UMD build. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
+| `--mathjax-url <URL>` | Load MathJax from this URL instead of the built-in copy. Must be a MathJax 3 build with `input/asciimath.js` beside it. |
+| `--no-math` | Show equations as the notation they were written in. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
 | `-w, --watch` | Re-render on change; see below. |
 | `--deny-warnings` | Exit non-zero if any warning was reported. |
@@ -308,7 +310,7 @@ delivered three ways, depending on where the page is going:
 
 | Output | Where the page gets mermaid |
 | --- | --- |
-| `serve` | The server's own `/__adocers/mermaid/…`, cached indefinitely since the name carries the version. |
+| `serve` | The server's own `/__adocers/vendored/…`, cached indefinitely since the name carries the version. |
 | A file | `adocers-assets/mermaid-<version>.min.js`, written beside the page. Documents sharing a directory share one copy. |
 | Standard output | The page carries the module itself; there is nowhere to put a file beside it. |
 
@@ -319,9 +321,31 @@ were written as. A `--fragment` keeps the diagram markup but never the script:
 the page it is embedded in owns what it loads.
 
 Diagrams follow the reader's colour scheme, and are redrawn if it changes, since
-mermaid bakes the theme into the SVG it produces. A diagram is shown at the size
-its own `viewBox` asks for and scrolls sideways if it does not fit, because
-scaling a wide flowchart down to a text column makes its labels unreadable.
+mermaid bakes the theme into the SVG it produces. A diagram is drawn to the
+width of the column and no wider, so it is there to be read rather than to be
+scrolled at, and it narrows with the column on a small screen.
+
+### Mathematics
+
+A `[stem]`, `[latexmath]` or `[asciimath]` block is an equation, typeset in the
+browser by MathJax on the same terms: vendored into the binary, delivered only
+to a page that has one, and never fetched from the network.
+
+MathJax is asked to convert each block by name rather than to scan the page for
+delimiters. Its scanner reads the backslash in Asciidoctor's `\$…\$` as an
+escape and leaves a stray dollar sign behind, and this renderer already knows
+which elements are equations and which notation each is in.
+
+| Output | Where the page gets MathJax |
+| --- | --- |
+| `serve` | The server's own `/__adocers/vendored/…`, as for mermaid. |
+| A file | `adocers-assets/mathjax-<version>-tex-mml-svg.js`, with `input/asciimath.js` beside it. |
+| Standard output | The page carries the module itself — and handles LaTeX only, since AsciiMath's processor is a second file MathJax insists on fetching and an inlined page has no URL to fetch it from. |
+
+`--mathjax-url` loads from somewhere else instead, and `--no-math` leaves an
+equation as the notation it was written in. The `math` feature is what compiles
+the copy in; a build without it behaves as though `--no-math` were always set,
+and is 2.2 MB of JavaScript lighter.
 
 ### Security
 

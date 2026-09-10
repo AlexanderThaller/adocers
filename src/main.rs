@@ -35,6 +35,7 @@ use crate::{
             self,
             Source,
         },
+        math,
     },
 };
 
@@ -98,6 +99,7 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
             icons: !common.no_icons,
             highlight: !common.no_highlight,
             mermaid: mermaid(common),
+            math: math(common),
         });
     }
 
@@ -118,6 +120,7 @@ pub(crate) fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
         icons: !common.no_icons,
         highlight: !common.no_highlight,
         mermaid: mermaid(common),
+        math: math(common),
     })
 }
 
@@ -145,6 +148,33 @@ fn mermaid(common: &CommonArgs) -> Option<Source> {
 /// reach: beside it on disk, or behind the server's own reserved path.
 pub(crate) fn uses_vendored_mermaid(common: &CommonArgs) -> bool {
     !common.no_mermaid && common.mermaid_url.is_none()
+}
+
+/// Where equations are typeset from, or `None` when they are to be left as the
+/// notation they were written in.
+///
+/// The same arrangement as [`mermaid`]: without `--mathjax-url` this names the
+/// vendored copy, and whoever produces the page replaces it with a path its
+/// reader can reach.
+fn math(common: &CommonArgs) -> Option<math::Source> {
+    if common.no_math {
+        return None;
+    }
+
+    match &common.mathjax_url {
+        Some(url) => Some(math::Source::Url(url.clone())),
+
+        // A build without the `math` feature has nothing vendored to point at,
+        // so an equation stays as it was written unless a URL was named.
+        None if cfg!(feature = "math") => Some(math::Source::Url(math::ASSET_HREF.to_string())),
+        None => None,
+    }
+}
+
+/// Whether equations are typeset from the vendored copy rather than a URL the
+/// author named.
+pub(crate) fn uses_vendored_mathjax(common: &CommonArgs) -> bool {
+    cfg!(feature = "math") && !common.no_math && common.mathjax_url.is_none()
 }
 
 /// Configure diagnostic output for this run.

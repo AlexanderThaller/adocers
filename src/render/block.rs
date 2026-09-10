@@ -188,6 +188,10 @@ impl<'src> Renderer<'src> {
                     ("\\$", "\\$")
                 };
 
+                // Only a page with an equation on it loads the typesetting
+                // module, so the page cannot be assembled until this is known.
+                self.equations = true;
+
                 self.open_wrapper(block, "stemblock");
                 self.block_title(block);
                 self.out.open("div", None, &["content"]);

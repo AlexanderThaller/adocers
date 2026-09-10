@@ -6,8 +6,12 @@ description = "Render AsciiDoc documents to HTML, with source-anchored diagnosti
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["serve", "highlight"]
+default = ["serve", "highlight", "math"]
 serve = ["dep:axum", "dep:tokio", "dep:tokio-util"]
+
+# MathJax, vendored so a page with equations needs no network. It is 2.2 MB of
+# JavaScript compiled into the binary, which is the whole cost of the feature.
+math = []
 
 # Syntax highlighting, and the grammars it parses with.
 highlight = [

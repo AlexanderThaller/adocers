@@ -36,6 +36,7 @@ use crate::{
         self,
         Options,
         diagram,
+        math,
     },
 };
 
@@ -68,6 +69,17 @@ pub struct Outcome {
     /// Whether the document held a diagram, and so needs the drawing module
     /// within reach of the page.
     pub diagrams: bool,
+
+    /// Whether the document held an equation, and so needs the typesetting
+    /// module to be reachable from the page.
+    #[cfg_attr(
+        not(feature = "math"),
+        expect(
+            dead_code,
+            reason = "there is no vendored module to place without the feature"
+        )
+    )]
+    pub equations: bool,
 
     /// Diagnostics reported for the document.
     pub counts: Counts,
@@ -163,6 +175,7 @@ pub fn render_file(
     Ok(Outcome {
         html: rendered.html,
         diagrams: rendered.diagrams,
+        equations: rendered.equations,
         counts,
         dependencies: dependencies.snapshot(),
     })
@@ -197,7 +210,16 @@ pub fn run(
             fs::write(path, html).with_context(|| format!("writing `{}`", path.display()))?;
 
             if outcome.diagrams && crate::uses_vendored_mermaid(common) {
-                write_asset(path)?;
+                write_asset(path, diagram::BUNDLE_FILE, diagram::BUNDLE)?;
+            }
+
+            #[cfg(feature = "math")]
+            if outcome.equations && crate::uses_vendored_mathjax(common) {
+                write_asset(path, math::BUNDLE_FILE, math::BUNDLE)?;
+
+                // MathJax's loader builds this path itself, so the processor
+                // has to keep its `input/` directory beside the bundle.
+                write_asset(path, math::ASCIIMATH_FILE, math::ASCIIMATH)?;
             }
         }
     }
@@ -217,40 +239,51 @@ fn destination_options(
     destination: &Destination,
     common: &CommonArgs,
 ) -> Options {
-    if !matches!(destination, Destination::Stdout) || !crate::uses_vendored_mermaid(common) {
+    if !matches!(destination, Destination::Stdout) {
         return options.clone();
     }
 
     Options {
-        mermaid: Some(diagram::Source::Inline),
+        mermaid: crate::uses_vendored_mermaid(common)
+            .then_some(diagram::Source::Inline)
+            .or_else(|| options.mermaid.clone()),
+
+        math: crate::uses_vendored_mathjax(common)
+            .then_some(math::Source::Inline)
+            .or_else(|| options.math.clone()),
+
         ..options.clone()
     }
 }
 
-/// Write the vendored drawing module beside a rendered page.
+/// Write one vendored module beside a rendered page.
 ///
-/// The file name carries mermaid's version, so several pages in one directory
-/// share one copy and an upgrade lands beside the old one rather than on top of
-/// a copy a browser may still be holding.
-fn write_asset(page: &Path) -> Result<()> {
-    let directory = page
+/// The file name carries the module's version, so several pages in one
+/// directory share one copy and an upgrade lands beside the old one rather than
+/// on top of a copy a browser may still be holding.
+///
+/// `name` may name a subdirectory, which `MathJax`'s loader requires of its
+/// `AsciiMath` processor.
+fn write_asset(page: &Path, name: &str, contents: &str) -> Result<()> {
+    let asset = page
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or(Path::new("."))
-        .join(diagram::ASSET_DIR);
+        .join(diagram::ASSET_DIR)
+        .join(name);
 
-    let asset = directory.join(diagram::BUNDLE_FILE);
-
-    // The bundle never changes under a given name, so a second document in the
+    // A module never changes under a given name, so a second document in the
     // same directory has nothing to add.
     if asset.is_file() {
         return Ok(());
     }
 
-    fs::create_dir_all(&directory)
-        .with_context(|| format!("creating `{}`", directory.display()))?;
+    if let Some(directory) = asset.parent() {
+        fs::create_dir_all(directory)
+            .with_context(|| format!("creating `{}`", directory.display()))?;
+    }
 
-    fs::write(&asset, diagram::BUNDLE).with_context(|| format!("writing `{}`", asset.display()))
+    fs::write(&asset, contents).with_context(|| format!("writing `{}`", asset.display()))
 }
 
 /// Apply one `-a` argument, in any of the forms the Asciidoctor CLI accepts.

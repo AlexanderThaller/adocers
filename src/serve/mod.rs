@@ -62,6 +62,9 @@ use crate::{
     serve::reload::Reload,
 };
 
+#[cfg(feature = "math")]
+use crate::render::math;
+
 /// Path prefix reserved for the server's own endpoints.
 ///
 /// It is deliberately unlikely to collide with a real file, because anything
@@ -75,7 +78,7 @@ const HTML: &str = "text/html; charset=utf-8";
 ///
 /// The name carries mermaid's version, so the response can be cached for as
 /// long as the browser likes: this URL will never hold anything else.
-const MERMAID_ENDPOINT: &str = "mermaid";
+const VENDORED_ENDPOINT: &str = "vendored";
 
 /// How long the vendored module may be cached for.
 ///
@@ -109,8 +112,16 @@ pub fn run(args: &ServeArgs) -> Result<()> {
 
     if crate::uses_vendored_mermaid(&args.common) {
         options.mermaid = Some(diagram::Source::Url(format!(
-            "{INTERNAL_PREFIX}{MERMAID_ENDPOINT}/{}",
+            "{INTERNAL_PREFIX}{VENDORED_ENDPOINT}/{}",
             diagram::BUNDLE_FILE
+        )));
+    }
+
+    #[cfg(feature = "math")]
+    if crate::uses_vendored_mathjax(&args.common) {
+        options.math = Some(math::Source::Url(format!(
+            "{INTERNAL_PREFIX}{VENDORED_ENDPOINT}/{}",
+            math::BUNDLE_FILE
         )));
     }
 
@@ -329,7 +340,7 @@ impl Site {
     /// Answer one of the server's own endpoints.
     async fn internal(&self, endpoint: &str, query: &str) -> Response {
         if let Some(file) = endpoint
-            .strip_prefix(MERMAID_ENDPOINT)
+            .strip_prefix(VENDORED_ENDPOINT)
             .and_then(|rest| rest.strip_prefix('/'))
         {
             return Self::vendored(file);
@@ -374,7 +385,18 @@ impl Site {
     /// The file name carries the version it holds, so a request for any other
     /// name is a stale link rather than something to guess at.
     fn vendored(file: &str) -> Response {
-        if file != diagram::BUNDLE_FILE {
+        // MathJax's loader asks for its AsciiMath processor by a path relative
+        // to the bundle, so that name is served as it comes.
+        let module = match file {
+            _ if file == diagram::BUNDLE_FILE => Some(diagram::BUNDLE),
+            #[cfg(feature = "math")]
+            _ if file == math::BUNDLE_FILE => Some(math::BUNDLE),
+            #[cfg(feature = "math")]
+            _ if file == math::ASCIIMATH_FILE => Some(math::ASCIIMATH),
+            _ => None,
+        };
+
+        let Some(module) = module else {
             return build(
                 StatusCode::NOT_FOUND,
                 "text/plain; charset=utf-8",
@@ -382,14 +404,14 @@ impl Site {
                 Caching::Never,
                 Body::from("No such asset."),
             );
-        }
+        };
 
         build(
             StatusCode::OK,
             "text/javascript; charset=utf-8",
             None,
             Caching::Forever,
-            Body::from(diagram::BUNDLE),
+            Body::from(module),
         )
     }
 
