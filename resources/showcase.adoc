@@ -3,6 +3,7 @@ Alexander Thaller <claude@thallerware.de>
 v1.0, 2026-09-10: one page through every feature
 :status: living document
 :page-tags: asciidoc, rendering, showcase
+:stem:
 :toc: left
 :toclevels: 3
 :sectnums:
@@ -322,34 +323,141 @@ Roses are red,
       and so is this line too.
 ____
 
-=== Examples, sidebars and open blocks
+=== Examples
+
+An example groups content and, when it carries a title, is numbered.
 
 .An example block
 ====
-An example groups content and, when it carries a title, is numbered.
+The caption counts up through the document, and `:example-caption:` renames it
+— or unsets it, if you would rather the title stood alone.
 ====
+
+`[%collapsible]` turns an example into a disclosure widget, with its title as
+the summary rather than a heading above it. `%open` starts it open.
 
 .A collapsible example
 [%collapsible]
 ====
-`[%collapsible]` turns an example into a disclosure widget. Its title becomes
-the summary rather than a heading above it. Add `%open` to have it start open.
+The reader gets the whole block only if they ask for it, which suits an aside
+that most readers can skip: the full output of a command, or the long form of
+an argument the surrounding text summarises.
 ====
 
-.A sidebar
-****
+=== Sidebars
+
 A sidebar holds an aside — related material that would interrupt the sentence
-it sits beside. Its title lives inside the box.
+it sits beside. Its title lives inside the box rather than above it.
+
+.A sidebar with a title
+****
+A sidebar can hold anything a document can. This one holds an admonition and a
+source block.
+
+TIP: Nested blocks keep their own shape.
+
+.And a listing, inside
+[source,js]
+----
+const aside = "content that would interrupt the main text";
+----
 ****
 
+When there is only one paragraph to set aside, the style can go above it and
+the delimiters can be dropped:
+
+[source,asciidoc]
+----
+[sidebar]
+One paragraph, no delimiters.
+----
+
+[sidebar]
+One paragraph, no delimiters.
+
+=== Open blocks
+
+An open block groups content without implying anything about it. It is the
+block to reach for when several paragraphs have to travel together — attached
+to a list item, say — and none of the other blocks would be telling the truth.
+
 --
-An open block groups content without implying anything about it.
+An open block, holding two paragraphs.
+
+Neither of which is styled in any particular way.
 --
+
+Given a style, a `--` block becomes whatever the style names. That saves
+remembering which delimiter goes with which block, and it is the only way to
+write some of them inside a list item:
+
+[source,asciidoc]
+------
+[sidebar]
+--
+This is a sidebar, written with open block delimiters.
+--
+------
+
+[sidebar]
+--
+This is a sidebar, written with open block delimiters.
+--
+
+`[quote]`, `[verse]`, `[literal]`, `[listing]`, `[source]`, `[example]` and
+`[abstract]` all work the same way. Any other style is simply put on the block
+as a class, for a stylesheet to find:
+
+[abstract]
+--
+An abstract is set as a quotation, which is how Asciidoctor distinguishes the
+summary of a document from the body of it.
+--
+
+=== Passthroughs, comments and breaks
+
+A `pass:[++++]` block goes to the page untouched, which is the escape hatch for
+markup AsciiDoc has no syntax for:
+
+++++
+<p style="border-left: 3px solid currentColor; padding-left: 1rem">
+  Raw HTML, passed through as written.
+</p>
+++++
+
+A `////` block is a comment and reaches the page as nothing at all. So does a
+single `//` line.
+
+////
+None of this is rendered.
+////
+
+A `'''` line is a thematic break:
 
 '''
 
-A `'''` line is a thematic break, as above. A `<<<` line is a page break: it
-emits a hint for print stylesheets and shows nothing on screen.
+A `<<<` line is a page break. It emits a hint for print stylesheets and shows
+nothing on screen.
+
+=== Mathematics
+
+With `:stem:` set, a `[stem]` block is delimited for a maths renderer rather
+than typeset here: `\$…\$` for AsciiMath and `\[…\]` for LaTeX. Nothing on the
+page draws it, so what follows is the delimiters and the source — load MathJax
+or KaTeX into the page and they become an equation.
+
+[stem]
+++++
+sqrt(4) = 2
+++++
+
+`[latexmath]` and `[asciimath]` say which notation a block is in, whatever
+`:stem:` was set to.
+
+[latexmath]
+++++
+C = \alpha + \beta Y^{\gamma} + \epsilon
+++++
 
 [#_admonitions]
 == Admonitions
