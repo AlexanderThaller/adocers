@@ -90,22 +90,10 @@ pub fn script(source: &Source) -> String {
       diagram.textContent = diagram.dataset.source;
     }});
 
-    return mermaid.run({{ nodes: diagrams }}).then(function () {{
-      // Mermaid sizes a diagram to fill its container, which scales a wide one
-      // down until its labels are unreadable — a 3000px flowchart in a 760px
-      // column ends up a quarter size. Give each diagram back the size its own
-      // viewBox asks for and let the container scroll instead.
-      diagrams.forEach(function (diagram) {{
-        var svg = diagram.querySelector("svg");
-        var box = svg && svg.viewBox.baseVal;
-
-        if (box && box.width) {{
-          svg.setAttribute("width", box.width);
-          svg.setAttribute("height", box.height);
-          svg.style.maxWidth = "none";
-        }}
-      }});
-    }});
+    // Mermaid sizes a diagram to its container and no wider, which is what a
+    // reader wants: a diagram that fits is a diagram they can see at a glance,
+    // and the stylesheet holds it to the column from there.
+    return mermaid.run({{ nodes: diagrams }});
   }}
 
   draw();

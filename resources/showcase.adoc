@@ -405,9 +405,9 @@ flowchart LR
 
 The diagram is drawn in the browser rather than at build time, so no headless
 browser has to be installed alongside this one. It follows your colour scheme
-and is redrawn if you change it. A diagram is shown at the size its own
-`viewBox` asks for and scrolls sideways if it does not fit, because scaling a
-wide flowchart down to a text column makes its labels unreadable.
+and is redrawn if you change it. A diagram is drawn to the width of the column
+and no wider, so it is there to be read rather than to be scrolled at, and it
+narrows with the column on a small screen. Images do the same.
 
 A sequence diagram, to show it is not only flowcharts:
 

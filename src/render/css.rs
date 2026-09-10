@@ -190,7 +190,9 @@ img, video, audio { max-width: 100%; height: auto; }
 /* Diagrams */
 .diagram > .content { text-align: center; overflow-x: auto; }
 pre.mermaid { background: none; padding: 0; margin: 0; text-align: center; line-height: normal; }
-pre.mermaid svg { display: inline-block; vertical-align: top; }
+/* A diagram is held to the column, whatever width it was drawn at. The scroll
+   on the box above is the fallback for one that cannot be made to fit. */
+pre.mermaid svg { display: inline-block; vertical-align: top; max-width: 100%; height: auto; }
 /* Until the drawing module runs, the source is what there is to show. */
 pre.mermaid:not([data-processed]) { text-align: left; background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 6px; }
 
