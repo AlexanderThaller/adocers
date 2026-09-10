@@ -28,6 +28,27 @@ impl<'src> Renderer<'src> {
         }
     }
 
+    /// Place a media target inside `:imagesdir:`, if it is somewhere that can
+    /// be moved.
+    ///
+    /// A target that already says where it lives is left alone: an absolute
+    /// URL, a root-relative path, and a `data:` URI are all complete addresses
+    /// already. Everything else is relative to `:imagesdir:`, which is how a
+    /// document keeps its pictures in one place without repeating the path on
+    /// every macro. Video and audio follow the same attribute; Asciidoctor has
+    /// no separate one for them.
+    fn in_images_dir(&self, target: &str) -> String {
+        let Some(dir) = self.attribute("imagesdir").filter(|dir| !dir.is_empty()) else {
+            return target.to_string();
+        };
+
+        if target.starts_with('/') || target.starts_with("data:") || target.contains("://") {
+            return target.to_string();
+        }
+
+        format!("{}/{target}", dir.trim_end_matches('/'))
+    }
+
     /// Open a media block's wrapper `div`.
     ///
     /// Asciidoctor names the float, then the alignment, then the roles — and
@@ -68,7 +89,8 @@ impl<'src> Renderer<'src> {
     /// `image::target[alt,width,height]`.
     fn image_block(&mut self, block: &'src Block<'src>, media: &'src MediaBlock<'src>) {
         let attrlist = media.macro_attrlist();
-        let target = media.resolved_target();
+        let target = self.in_images_dir(media.resolved_target());
+        let target = target.as_str();
 
         let alt =
             positional(attrlist, "alt", 1).map_or_else(|| alt_from_target(target), str::to_string);
@@ -108,13 +130,15 @@ impl<'src> Renderer<'src> {
 
         let mut tag = format!(
             "<video src=\"{}{}\"",
-            escape_attr(media.resolved_target()),
+            escape_attr(&self.in_images_dir(media.resolved_target())),
             escape_attr(&time_fragment(attrlist))
         );
 
+        let poster = named(attrlist, "poster").map(|poster| self.in_images_dir(poster));
+
         attribute(&mut tag, "width", named(attrlist, "width"));
         attribute(&mut tag, "height", named(attrlist, "height"));
-        attribute(&mut tag, "poster", named(attrlist, "poster"));
+        attribute(&mut tag, "poster", poster.as_deref());
 
         if !attrlist.has_option("nocontrols") {
             tag.push_str(" controls");
@@ -145,7 +169,10 @@ impl<'src> Renderer<'src> {
     fn audio_block(&mut self, block: &'src Block<'src>, media: &'src MediaBlock<'src>) {
         let attrlist = media.macro_attrlist();
 
-        let mut tag = format!("<audio src=\"{}\"", escape_attr(media.resolved_target()));
+        let mut tag = format!(
+            "<audio src=\"{}\"",
+            escape_attr(&self.in_images_dir(media.resolved_target()))
+        );
 
         if !attrlist.has_option("nocontrols") {
             tag.push_str(" controls");

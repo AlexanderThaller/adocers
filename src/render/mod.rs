@@ -478,6 +478,18 @@ impl Renderer<'_> {
         self.out.close("div");
     }
 
+    /// Render something into a buffer of its own and hand back the markup.
+    ///
+    /// Used where a wrapper should only be written once its contents turn out
+    /// to be worth wrapping.
+    pub(super) fn aside(&mut self, render: impl FnOnce(&mut Self)) -> String {
+        let outer = std::mem::replace(&mut self.out, Buffer::new());
+
+        render(self);
+
+        std::mem::replace(&mut self.out, outer).finish()
+    }
+
     /// The value of a document attribute, if it is set to one.
     fn attribute(&self, name: &str) -> Option<String> {
         match self.document.attribute_value(name) {

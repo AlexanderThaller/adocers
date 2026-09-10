@@ -99,9 +99,19 @@ impl Renderer<'_> {
         }
 
         let id = overrides.id.unwrap_or("toc");
-        let class = overrides
-            .class
-            .map_or_else(|| self.document.toc_class().to_string(), str::to_string);
+        // A docked outline is positioned by a class on `<body>`, which a
+        // fragment has not got, so a fragment's outline is always the plain
+        // inline one however the document asked for it to be placed.
+        let class = overrides.class.map_or_else(
+            || {
+                if self.options.fragment {
+                    "toc".to_string()
+                } else {
+                    self.document.toc_class().to_string()
+                }
+            },
+            str::to_string,
+        );
         let title = overrides
             .title
             .map_or_else(|| self.document.toc_title().to_string(), str::to_string);

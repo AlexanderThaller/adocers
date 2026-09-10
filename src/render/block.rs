@@ -25,6 +25,7 @@ use asciidoc_parser::{
 
 use crate::render::{
     Renderer,
+    TocMode,
     callout,
     highlight,
     html::{
@@ -106,6 +107,13 @@ impl<'src> Renderer<'src> {
 
         match simple.style() {
             SimpleBlockStyle::Paragraph => {
+                // A line comment reaches the back end as a paragraph with
+                // nothing in it. So does anything else that substitutes away to
+                // nothing, and none of it should leave an empty `<p>` behind.
+                if content.trim().is_empty() {
+                    return;
+                }
+
                 self.open_wrapper(block, "paragraph");
                 self.block_title(block);
                 self.out.line(&format!("<p>{content}</p>"));
@@ -171,7 +179,7 @@ impl<'src> Renderer<'src> {
     fn listing(&mut self, block: &'src Block<'src>, content: &'src Content<'src>) {
         let rendered = content.rendered_html();
 
-        if self.options.mermaid.is_some() && is_mermaid(block) {
+        if self.options.mermaid.is_some() && self.is_mermaid(block) {
             self.mermaid_block(block, rendered);
             return;
         }
@@ -183,13 +191,15 @@ impl<'src> Renderer<'src> {
         // A `[source]` block is wrapped in `<code>` whether or not it named a
         // language: the style alone is what says this is source.
         if block.declared_style() == Some("source") {
-            let language = source_language(block);
+            let language = self.source_language(block);
 
             let body = language
+                .as_deref()
                 .and_then(|language| self.highlighted(language, content))
                 .unwrap_or_else(|| rendered.to_string());
 
             let language = language
+                .as_deref()
                 .map(escape_attr)
                 .map_or_else(String::new, |language| {
                     format!(" class=\"language-{language}\" data-lang=\"{language}\"")
@@ -242,6 +252,48 @@ impl<'src> Renderer<'src> {
         out
     }
 
+    /// The language a source block should be highlighted and labelled as.
+    ///
+    /// `[source,rust]` names it outright. A bare `[source]` takes the
+    /// document's `:source-language:`, which is how a document whose listings
+    /// are all one language says so once instead of on every block.
+    fn source_language(&self, block: &'src Block<'src>) -> Option<String> {
+        if block.declared_style() != Some("source") {
+            return None;
+        }
+
+        let declared = block.attrlist().and_then(|attrlist| {
+            attrlist
+                .named_attribute("language")
+                .or_else(|| attrlist.nth_attribute(2))
+                .map(asciidoc_parser::attributes::ElementAttribute::value)
+                .filter(|language| !language.is_empty())
+                .map(str::to_string)
+        });
+
+        declared.or_else(|| {
+            self.attribute("source-language")
+                .filter(|language| !language.is_empty())
+        })
+    }
+
+    /// Whether a block was written as a mermaid diagram.
+    ///
+    /// Both spellings count: `[mermaid]`, which `asciidoctor-diagram` uses, and
+    /// `[source,mermaid]`, which renders as a diagram on GitHub. A document
+    /// that has to serve both usually picks between them with an attribute, so
+    /// a renderer that took only one would show the other as a wall of arrows.
+    fn is_mermaid(&self, block: &'src Block<'src>) -> bool {
+        let declared = block
+            .declared_style()
+            .is_some_and(|style| style.to_lowercase() == "mermaid");
+
+        declared
+            || self
+                .source_language(block)
+                .is_some_and(|language| language.to_lowercase() == "mermaid")
+    }
+
     /// Whether a stem block holds LaTeX rather than `AsciiMath`.
     ///
     /// `[latexmath]` and `[asciimath]` say so outright; a plain `[stem]` takes
@@ -285,7 +337,7 @@ impl<'src> Renderer<'src> {
 
     /// `<div class="literalblock">`.
     fn literal(&mut self, block: &'src Block<'src>, content: &str) {
-        if self.options.mermaid.is_some() && is_mermaid(block) {
+        if self.options.mermaid.is_some() && self.is_mermaid(block) {
             self.mermaid_block(block, content);
             return;
         }
@@ -332,7 +384,20 @@ impl<'src> Renderer<'src> {
     /// deeper sections none, so this reproduces that asymmetry rather than
     /// inventing a uniform structure a stylesheet would not expect.
     fn section_block(&mut self, block: &'src Block<'src>, section: &'src SectionBlock<'src>) {
+        // A level-0 heading that declares a style — `[colophon]`, `[preface]`,
+        // `[appendix]` and the rest — is a section of the book rather than a
+        // part of it, and is set at the level below. A discrete heading is the
+        // exception: it is not a section at all.
         let level = section.level();
+        let level = if level == 0
+            && section.section_type() != SectionType::Discrete
+            && block.declared_style().is_some()
+        {
+            1
+        } else {
+            level
+        };
+
         let heading = format!("h{}", (level + 1).min(6));
         let title = format!("{}{}", section_prefix(section), section.section_title());
 
@@ -379,15 +444,24 @@ impl<'src> Renderer<'src> {
     /// The preamble: everything between the document header and the first
     /// section.
     fn preamble_block(&mut self, preamble: &'src Preamble<'src>) {
+        // Rendered aside first, because a preamble holding nothing that reaches
+        // the page — a lone comment, say — is not a preamble, and an empty one
+        // would draw its own margins around nothing.
+        let body = self.aside(|renderer| renderer.blocks(preamble.child_blocks()));
+
+        if body.trim().is_empty() && self.document.toc_mode() != TocMode::Preamble {
+            return;
+        }
+
         self.out.open("div", Some("preamble"), &[]);
         self.out.open("div", None, &["sectionbody"]);
-        self.blocks(preamble.child_blocks());
+        self.out.raw(&body);
         self.out.close("div");
 
         // `:toc: preamble` places the outline below the preamble's body but
         // still inside it: the preamble introduces the document, and the
         // outline is the last thing that introduction says.
-        if self.document.toc_mode() == asciidoc_parser::document::TocMode::Preamble {
+        if self.document.toc_mode() == TocMode::Preamble {
             self.toc();
         }
 
@@ -631,23 +705,6 @@ pub(super) fn section_prefix<'src>(section: &'src SectionBlock<'src>) -> String 
     }
 }
 
-/// Whether a block was written as a mermaid diagram.
-///
-/// Both spellings in circulation are recognized: `[mermaid]`, which Antora and
-/// `asciidoctor-diagram` use, and `[source,mermaid]`, which is what renders as
-/// a diagram on GitHub. A document that has to serve both usually picks between
-/// them with an attribute, so a renderer that took only one would show the
-/// other as a wall of arrows.
-fn is_mermaid<'src>(block: &'src Block<'src>) -> bool {
-    let declared = block
-        .declared_style()
-        .is_some_and(|style| style.to_lowercase() == "mermaid");
-
-    declared || source_language(block).is_some_and(|language| language.to_lowercase() == "mermaid")
-}
-
-/// The language a listing block declares, from `[source,rust]` or
-/// `[source,language=rust]`.
 /// The `nowrap` class a `<pre>` carries when the block asked for it, ready to
 /// be appended to a class list that already has something in it.
 fn nowrap<'src>(block: &'src Block<'src>) -> &'static str {
@@ -666,18 +723,4 @@ fn pre_class<'src>(block: &'src Block<'src>) -> &'static str {
     } else {
         ""
     }
-}
-
-fn source_language<'src>(block: &'src Block<'src>) -> Option<&'src str> {
-    if block.declared_style() != Some("source") {
-        return None;
-    }
-
-    let attrlist = block.attrlist()?;
-
-    attrlist
-        .named_attribute("language")
-        .or_else(|| attrlist.nth_attribute(2))
-        .map(asciidoc_parser::attributes::ElementAttribute::value)
-        .filter(|language| !language.is_empty())
 }
