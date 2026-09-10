@@ -11,32 +11,44 @@ serve = ["dep:axum", "dep:tokio", "dep:tokio-util"]
 
 # Syntax highlighting, and the grammars it parses with.
 highlight = [
-    "dep:tree-sitter",
-    "dep:tree-sitter-highlight",
-    "dep:tree-sitter-rust",
-    "dep:tree-sitter-python",
-    "dep:tree-sitter-javascript",
-    "dep:tree-sitter-typescript",
-    "dep:tree-sitter-go",
-    "dep:tree-sitter-c",
-    "dep:tree-sitter-bash",
-    "dep:tree-sitter-json",
-    "dep:tree-sitter-toml-ng",
-    "dep:tree-sitter-yaml",
-    "dep:tree-sitter-html",
-    "dep:tree-sitter-css",
-    "dep:tree-sitter-java",
+  "dep:tree-sitter",
+  "dep:tree-sitter-highlight",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-javascript",
+  "dep:tree-sitter-typescript",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-c",
+  "dep:tree-sitter-bash",
+  "dep:tree-sitter-json",
+  "dep:tree-sitter-toml-ng",
+  "dep:tree-sitter-yaml",
+  "dep:tree-sitter-html",
+  "dep:tree-sitter-css",
+  "dep:tree-sitter-java",
 ]
 
 [dependencies]
 anyhow = "1"
 ariadne = "0.6"
 asciidoc-parser = "0.31"
-axum = { version = "0.8", default-features = false, features = ["http1", "tokio"], optional = true }
+axum = { version = "0.8", default-features = false, features = [
+  "http1",
+  "tokio",
+], optional = true }
 clap = { version = "4", features = ["derive"] }
 notify-debouncer-full = "0.7"
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "fs", "time", "sync"], optional = true }
-tokio-util = { version = "0.7", default-features = false, features = ["io"], optional = true }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "net",
+  "signal",
+  "fs",
+  "time",
+  "sync",
+], optional = true }
+tokio-util = { version = "0.7", default-features = false, features = [
+  "io",
+], optional = true }
 tree-sitter = { version = "0.27", optional = true }
 tree-sitter-bash = { version = "0.25", optional = true }
 tree-sitter-c = { version = "0.24", optional = true }
@@ -70,7 +82,8 @@ unwrap-used = "warn"
 missing-panics-doc = "allow"
 missing-errors-doc = "allow"
 
-[profile.release]
+[profile.deploy]
+inherits = "release"
 strip = true
 lto = true
 codegen-units = 1
