@@ -1,0 +1,3 @@
+[submodule "resources/asciidoctor-doctest"]
+	path = resources/asciidoctor-doctest
+	url = https://github.com/asciidoctor-contrib/asciidoctor-doctest

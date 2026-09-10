@@ -1,0 +1,19 @@
+[package]
+name = "adocers"
+version = "0.1.0"
+edition = "2024"
+description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1.0.104"
+ariadne = "0.6.0"
+asciidoc-parser = "0.31.1"
+clap = { version = "4.6.6", features = ["derive"] }
+notify-debouncer-full = "0.7.0"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"

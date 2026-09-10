@@ -1,0 +1,457 @@
+//! Block-level rendering: the dispatch from a parsed [`Block`] to its markup.
+
+use asciidoc_parser::blocks::{
+    AdmonitionBlock,
+    Block,
+    Break,
+    BreakType,
+    CompoundDelimitedBlock,
+    CompoundDelimitedContext,
+    IsBlock,
+    Preamble,
+    QuoteBlock,
+    QuoteType,
+    RawDelimitedBlock,
+    SectionBlock,
+    SectionType,
+    SimpleBlock,
+    SimpleBlockStyle,
+};
+
+use crate::render::{
+    Renderer,
+    html::{
+        escape_attr,
+        escape_text,
+    },
+};
+
+impl<'src> Renderer<'src> {
+    /// Render one block and everything beneath it.
+    pub(super) fn block(&mut self, block: &'src Block<'src>) {
+        match block {
+            Block::Simple(simple) => self.simple_block(block, simple),
+            Block::Section(section) => self.section_block(block, section),
+            Block::List(list) => self.list_block(block, list),
+            Block::RawDelimited(raw) => self.raw_delimited_block(block, raw),
+            Block::CompoundDelimited(compound) => self.compound_delimited_block(block, compound),
+            Block::Admonition(admonition) => self.admonition_block(block, admonition),
+            Block::Quote(quote) => self.quote_block(block, quote),
+            Block::Media(media) => self.media_block(block, media),
+            Block::Table(table) => self.table_block(block, table),
+            Block::Preamble(preamble) => self.preamble_block(preamble),
+            Block::Break(r#break) => self.break_block(r#break),
+            Block::Toc(_) => self.toc_macro(),
+
+            // A list item never appears on its own: its list renders it, along
+            // with the marker that gives it meaning.
+            Block::ListItem(_) => {}
+
+            // An attribute entry in the body sets a value for the blocks that
+            // follow it; the parser has already applied it and it has no
+            // rendering of its own.
+            Block::DocumentAttribute(_) => {}
+
+            _ => {}
+        }
+    }
+
+    /// Render a sequence of blocks in document order.
+    pub(super) fn blocks(&mut self, blocks: impl Iterator<Item = &'src Block<'src>>) {
+        for block in blocks {
+            self.block(block);
+        }
+    }
+
+    /// Emit a block's `<div class="title">`, including any caption prefix
+    /// ("Example 1. ", "Figure 2. ") the parser assigned.
+    pub(super) fn block_title(&mut self, block: &'src Block<'src>) {
+        let Some(title) = block.title() else {
+            return;
+        };
+
+        let caption = block.caption().unwrap_or_default();
+
+        // Both halves are already inline-rendered; escaping here would show the
+        // reader the markup instead of applying it.
+        self.out
+            .line(&format!("<div class=\"title\">{caption}{title}</div>"));
+    }
+
+    /// The class list for a block wrapper: the context class first, then any
+    /// roles the author attached.
+    pub(super) fn wrapper_classes(&self, block: &'src Block<'src>, context: &str) -> Vec<String> {
+        let mut classes = vec![context.to_string()];
+        classes.extend(block.roles().into_iter().map(str::to_string));
+        classes
+    }
+
+    /// Open a block wrapper `<div>` with the block's id and class list.
+    pub(super) fn open_wrapper(&mut self, block: &'src Block<'src>, context: &str) {
+        let classes = self.wrapper_classes(block, context);
+        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+        self.out.open("div", block.id(), &classes);
+    }
+
+    /// A paragraph, or a listing/literal block written without delimiters.
+    fn simple_block(&mut self, block: &'src Block<'src>, simple: &'src SimpleBlock<'src>) {
+        let content = simple.content().rendered_html();
+
+        match simple.style() {
+            SimpleBlockStyle::Paragraph => {
+                self.open_wrapper(block, "paragraph");
+                self.block_title(block);
+                self.out.line(&format!("<p>{content}</p>"));
+                self.out.close("div");
+            }
+
+            SimpleBlockStyle::Literal => self.literal(block, content),
+            SimpleBlockStyle::Listing | SimpleBlockStyle::Source => self.listing(block, content),
+        }
+    }
+
+    /// A `----` listing, `....` literal, `++++` passthrough, `////` comment or
+    /// stem block. Their content is verbatim, already substituted to the degree
+    /// the block's substitution group calls for.
+    fn raw_delimited_block(
+        &mut self,
+        block: &'src Block<'src>,
+        raw: &'src RawDelimitedBlock<'src>,
+    ) {
+        let content = raw.content().rendered_html();
+
+        match raw.raw_context().as_ref() {
+            "listing" => self.listing(block, content),
+            "literal" => self.literal(block, content),
+
+            "stem" => {
+                self.open_wrapper(block, "stemblock");
+                self.block_title(block);
+                self.out.open("div", None, &["content"]);
+                self.out.line(content);
+                self.out.close("div");
+                self.out.close("div");
+            }
+
+            // A passthrough block is the author asking for their bytes to reach
+            // the page untouched.
+            "pass" => self.out.line(content),
+
+            // A comment block is not part of the output at all.
+            "comment" => {}
+
+            other => {
+                self.open_wrapper(block, other);
+                self.block_title(block);
+                self.out.line(content);
+                self.out.close("div");
+            }
+        }
+    }
+
+    /// `<div class="listingblock">`, with syntax-highlighting hooks when the
+    /// block declares a source language.
+    fn listing(&mut self, block: &'src Block<'src>, content: &str) {
+        self.open_wrapper(block, "listingblock");
+        self.block_title(block);
+        self.out.open("div", None, &["content"]);
+
+        match source_language(block) {
+            Some(language) => {
+                let language = escape_attr(language);
+                self.out.line(&format!(
+                    "<pre class=\"highlight\"><code class=\"language-{language}\" \
+                     data-lang=\"{language}\">{content}</code></pre>"
+                ));
+            }
+
+            None => self.out.line(&format!("<pre>{content}</pre>")),
+        }
+
+        self.out.close("div");
+        self.out.close("div");
+    }
+
+    /// `<div class="literalblock">`.
+    fn literal(&mut self, block: &'src Block<'src>, content: &str) {
+        self.open_wrapper(block, "literalblock");
+        self.block_title(block);
+        self.out.open("div", None, &["content"]);
+        self.out.line(&format!("<pre>{content}</pre>"));
+        self.out.close("div");
+        self.out.close("div");
+    }
+
+    /// A section heading and its body.
+    ///
+    /// Asciidoctor gives a level-1 section an extra `sectionbody` wrapper and
+    /// deeper sections none, so this reproduces that asymmetry rather than
+    /// inventing a uniform structure a stylesheet would not expect.
+    fn section_block(&mut self, block: &'src Block<'src>, section: &'src SectionBlock<'src>) {
+        let level = section.level();
+        let heading = format!("h{}", (level + 1).min(6));
+        let title = format!(
+            "{}{}",
+            self.section_prefix(section),
+            section.section_title()
+        );
+
+        if section.section_type() == SectionType::Discrete {
+            // A discrete heading is a heading and nothing else: it owns no body
+            // and never enters the table of contents.
+            let mut classes = vec!["discrete".to_string()];
+            classes.extend(block.roles().into_iter().map(str::to_string));
+            let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+            self.out.element(&heading, section.id(), &classes, &title);
+            return;
+        }
+
+        if level == 0 {
+            // A level-0 heading in the body is not a section wrapper of its own.
+            self.out.element("h1", section.id(), &["sect0"], &title);
+            self.blocks(section.child_blocks());
+            return;
+        }
+
+        // The id goes on the heading, which is what a link to the section
+        // should scroll to; putting it on the wrapper as well would make the
+        // document contain the same id twice.
+        let classes = self.wrapper_classes(block, &format!("sect{level}"));
+        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+        self.out.open("div", None, &classes);
+        self.out.element(&heading, section.id(), &[], &title);
+
+        if level == 1 {
+            self.out.open("div", None, &["sectionbody"]);
+            self.blocks(section.child_blocks());
+            self.out.close("div");
+        } else {
+            self.blocks(section.child_blocks());
+        }
+
+        self.out.close("div");
+    }
+
+    /// The numbering that precedes a section title, if the document numbers
+    /// sections.
+    fn section_prefix(&self, section: &'src SectionBlock<'src>) -> String {
+        // An appendix carries a full caption ("Appendix A: "); an ordinary
+        // numbered section carries only its number.
+        if let Some(caption) = section.caption() {
+            return caption.to_string();
+        }
+
+        match section.section_number() {
+            Some(number) => format!("{number}. "),
+            None => String::new(),
+        }
+    }
+
+    /// The preamble: everything between the document header and the first
+    /// section.
+    fn preamble_block(&mut self, preamble: &'src Preamble<'src>) {
+        self.out.open("div", Some("preamble"), &[]);
+        self.out.open("div", None, &["sectionbody"]);
+        self.blocks(preamble.child_blocks());
+        self.out.close("div");
+        self.out.close("div");
+    }
+
+    /// `'''` and `<<<`.
+    fn break_block(&mut self, r#break: &'src Break<'src>) {
+        match r#break.type_() {
+            BreakType::Thematic => self.out.line("<hr>"),
+
+            // There is no page break in HTML, only a hint for print styles.
+            BreakType::Page => self
+                .out
+                .line("<div style=\"page-break-after: always;\"></div>"),
+        }
+    }
+
+    /// `NOTE:`, `TIP:`, `IMPORTANT:`, `CAUTION:` and `WARNING:`, in both their
+    /// paragraph and delimited forms.
+    fn admonition_block(
+        &mut self,
+        block: &'src Block<'src>,
+        admonition: &'src AdmonitionBlock<'src>,
+    ) {
+        let name = admonition.name();
+        let label = admonition.label().to_string();
+
+        let mut classes = vec!["admonitionblock".to_string(), name.to_string()];
+        classes.extend(block.roles().into_iter().map(str::to_string));
+        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+        self.out.open("div", block.id(), &classes);
+        self.out.line("<table>");
+        self.out.line("<tr>");
+        self.out.line("<td class=\"icon\">");
+
+        if admonition.icons_font() {
+            // Font icons come from a Font Awesome stylesheet the page has to
+            // supply; without one the label below is still readable.
+            self.out.line(&format!(
+                "<i class=\"fa icon-{name}\" title=\"{}\"></i>",
+                escape_attr(&label)
+            ));
+        } else {
+            self.out.line(&format!(
+                "<div class=\"title\">{}</div>",
+                escape_text(&label)
+            ));
+        }
+
+        self.out.line("</td>");
+        self.out.line("<td class=\"content\">");
+
+        self.block_title(block);
+
+        match admonition.content() {
+            Some(content) => self.out.line(content.rendered_html()),
+            None => self.blocks(admonition.child_blocks()),
+        }
+
+        self.out.line("</td>");
+        self.out.line("</tr>");
+        self.out.line("</table>");
+        self.out.close("div");
+    }
+
+    /// `[quote]` and `[verse]`, delimited or not.
+    fn quote_block(&mut self, block: &'src Block<'src>, quote: &'src QuoteBlock<'src>) {
+        let is_verse = quote.type_() == QuoteType::Verse;
+        let context = if is_verse { "verseblock" } else { "quoteblock" };
+
+        self.open_wrapper(block, context);
+        self.block_title(block);
+
+        if is_verse {
+            // A verse keeps the author's line breaks, so its content is
+            // preformatted rather than flowed.
+            let content = quote
+                .content()
+                .map(|c| c.rendered_html())
+                .unwrap_or_default();
+            self.out
+                .line(&format!("<pre class=\"content\">{content}</pre>"));
+        } else {
+            self.out.line("<blockquote>");
+
+            match quote.content() {
+                Some(content) => self.out.line(content.rendered_html()),
+                None => self.blocks(quote.child_blocks()),
+            }
+
+            self.out.line("</blockquote>");
+        }
+
+        self.attribution(quote);
+        self.out.close("div");
+    }
+
+    /// The `— Author, Work` line beneath a quote or verse.
+    fn attribution(&mut self, quote: &'src QuoteBlock<'src>) {
+        let attribution = quote.attribution();
+        let citetitle = quote.citetitle();
+
+        if attribution.is_none() && citetitle.is_none() {
+            return;
+        }
+
+        self.out.open("div", None, &["attribution"]);
+
+        match (attribution, citetitle) {
+            (Some(who), Some(what)) => {
+                self.out.line(&format!("&#8212; {who}<br>"));
+                self.out.line(&format!("<cite>{what}</cite>"));
+            }
+
+            (Some(who), None) => self.out.line(&format!("&#8212; {who}")),
+            (None, Some(what)) => self.out.line(&format!("<cite>{what}</cite>")),
+            (None, None) => unreachable!("guarded above"),
+        }
+
+        self.out.close("div");
+    }
+
+    /// `====` example, `****` sidebar and `--` open blocks — the three
+    /// delimited forms whose content is itself a sequence of blocks.
+    fn compound_delimited_block(
+        &mut self,
+        block: &'src Block<'src>,
+        compound: &'src CompoundDelimitedBlock<'src>,
+    ) {
+        match compound.context_kind() {
+            CompoundDelimitedContext::Example => {
+                // `%collapsible` turns an example into a disclosure widget, and
+                // its title becomes the summary rather than a heading above it.
+                if block.has_option("collapsible") {
+                    self.open_wrapper(block, "exampleblock");
+
+                    let open = if block.has_option("open") {
+                        " open"
+                    } else {
+                        ""
+                    };
+                    let summary = block.title().unwrap_or("Details");
+
+                    self.out.line(&format!("<details{open}>"));
+                    self.out
+                        .line(&format!("<summary class=\"title\">{summary}</summary>"));
+                    self.out.open("div", None, &["content"]);
+                    self.blocks(compound.child_blocks());
+                    self.out.close("div");
+                    self.out.line("</details>");
+                    self.out.close("div");
+                    return;
+                }
+
+                self.open_wrapper(block, "exampleblock");
+                self.block_title(block);
+                self.out.open("div", None, &["content"]);
+                self.blocks(compound.child_blocks());
+                self.out.close("div");
+                self.out.close("div");
+            }
+
+            CompoundDelimitedContext::Sidebar => {
+                // A sidebar's title lives inside its content box, not above it.
+                self.open_wrapper(block, "sidebarblock");
+                self.out.open("div", None, &["content"]);
+                self.block_title(block);
+                self.blocks(compound.child_blocks());
+                self.out.close("div");
+                self.out.close("div");
+            }
+
+            CompoundDelimitedContext::Open => {
+                self.open_wrapper(block, "openblock");
+                self.block_title(block);
+                self.out.open("div", None, &["content"]);
+                self.blocks(compound.child_blocks());
+                self.out.close("div");
+                self.out.close("div");
+            }
+        }
+    }
+}
+
+/// The language a listing block declares, from `[source,rust]` or
+/// `[source,language=rust]`.
+fn source_language<'src>(block: &'src Block<'src>) -> Option<&'src str> {
+    if block.declared_style() != Some("source") {
+        return None;
+    }
+
+    let attrlist = block.attrlist()?;
+
+    attrlist
+        .named_attribute("language")
+        .or_else(|| attrlist.nth_attribute(2))
+        .map(|attribute| attribute.value())
+        .filter(|language| !language.is_empty())
+}
