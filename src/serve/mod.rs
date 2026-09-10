@@ -181,13 +181,16 @@ async fn handle(State(site): State<Arc<Site>>, request: Request) -> Response {
         return site.internal(endpoint, &query).await;
     }
 
+    // `?raw` asks for the document behind a page rather than the page.
+    let raw = query_flag(&query, "raw");
+
     // Resolving a path, reading a directory and parsing a document are all
     // blocking work, and doing them on a runtime thread would stall every other
     // request in flight.
     let answer = {
         let site = Arc::clone(&site);
 
-        tokio::task::spawn_blocking(move || site.answer(&path, &encoded_path)).await
+        tokio::task::spawn_blocking(move || site.answer(&path, &encoded_path, &query, raw)).await
     };
 
     match answer {
@@ -264,9 +267,10 @@ enum Answer {
 impl Site {
     /// Work out what a request should be answered with.
     ///
-    /// `encoded_path` is the path as it arrived, used to build a redirect that
-    /// is still valid after the round trip.
-    fn answer(&self, path: &str, encoded_path: &str) -> Answer {
+    /// `encoded_path` and `query` are the request as it arrived, used to build
+    /// a redirect that is still valid after the round trip. `raw` asks for
+    /// a document's source instead of its rendering.
+    fn answer(&self, path: &str, encoded_path: &str, query: &str, raw: bool) -> Answer {
         let Some(target) = self.resolve(path) else {
             return self.not_found(path);
         };
@@ -277,17 +281,25 @@ impl Site {
 
         if metadata.is_dir() {
             // Without the trailing slash every relative link in the page would
-            // resolve against the parent directory instead of this one.
+            // resolve against the parent directory instead of this one. The
+            // query has to survive the trip, or `?raw` would be lost exactly
+            // when it was asked for.
             if !path.ends_with('/') {
+                let query = if query.is_empty() {
+                    String::new()
+                } else {
+                    format!("?{query}")
+                };
+
                 return Answer::Redirect {
-                    location: format!("{encoded_path}/"),
+                    location: format!("{encoded_path}/{query}"),
                 };
             }
 
-            return self.directory(&target, path);
+            return self.directory(&target, path, raw);
         }
 
-        self.file(&target)
+        self.file(&target, raw)
     }
 
     /// Answer one of the server's own endpoints.
@@ -327,12 +339,16 @@ impl Site {
     }
 
     /// Answer a request that named a directory.
-    fn directory(&self, target: &Path, path: &str) -> Answer {
+    ///
+    /// `raw` reaches the index document, so the source behind a directory's
+    /// page can be read the same way as the source behind any other page. A
+    /// listing has no document behind it, so it ignores the flag.
+    fn directory(&self, target: &Path, path: &str, raw: bool) -> Answer {
         for name in &self.index_files {
             let candidate = target.join(name);
 
             if candidate.is_file() {
-                return self.file(&candidate);
+                return self.file(&candidate, raw);
             }
         }
 
@@ -361,8 +377,11 @@ impl Site {
     }
 
     /// Answer a request that named a file.
-    fn file(&self, target: &Path) -> Answer {
-        if !mime::is_asciidoc(target) {
+    ///
+    /// Only a document is rendered, so `raw` matters only for one: every other
+    /// file is served as it is either way.
+    fn file(&self, target: &Path, raw: bool) -> Answer {
+        if raw || !mime::is_asciidoc(target) {
             return Answer::File {
                 path: target.to_path_buf(),
                 content_type: mime::of(target),
@@ -525,6 +544,19 @@ fn query_value<'a>(query: &'a str, name: &str) -> Option<&'a str> {
         .find_map(|(key, value)| (key == name).then_some(value))
 }
 
+/// Whether a query string sets a flag.
+///
+/// A bare `?raw` is the form a person types, and `?raw=1` or `?raw=true` the
+/// form a script generates, so both mean the same thing. The negative values
+/// are honoured too, because a page that builds links by appending `raw=0`
+/// should not turn the flag on.
+fn query_flag(query: &str, name: &str) -> bool {
+    query.split('&').any(|pair| match pair.split_once('=') {
+        None => pair == name,
+        Some((key, value)) => key == name && !matches!(value, "0" | "false" | "no" | "off"),
+    })
+}
+
 /// Interpret the `--bind` value, which may be a full address or just a port.
 fn bind_address(bind: &str) -> String {
     if bind.parse::<u16>().is_ok() {
@@ -532,4 +564,44 @@ fn bind_address(bind: &str) -> String {
     }
 
     bind.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_a_flag_in_every_form_it_is_written() {
+        assert!(query_flag("raw", "raw"));
+        assert!(query_flag("raw=", "raw"));
+        assert!(query_flag("raw=1", "raw"));
+        assert!(query_flag("raw=true", "raw"));
+        assert!(query_flag("generation=3&raw", "raw"));
+    }
+
+    #[test]
+    fn leaves_a_flag_off_when_it_was_not_set() {
+        assert!(!query_flag("", "raw"));
+        assert!(!query_flag("generation=3", "raw"));
+        assert!(!query_flag("raw=0", "raw"));
+        assert!(!query_flag("raw=false", "raw"));
+
+        // A parameter that merely starts with the name is a different one.
+        assert!(!query_flag("rawish", "raw"));
+        assert!(!query_flag("rawish=1", "raw"));
+    }
+
+    #[test]
+    fn reads_a_query_parameter_value() {
+        assert_eq!(query_value("generation=7", "generation"), Some("7"));
+        assert_eq!(query_value("raw&generation=7", "generation"), Some("7"));
+        assert_eq!(query_value("generation=7", "raw"), None);
+    }
+
+    #[test]
+    fn accepts_a_bare_port_as_a_bind_address() {
+        assert_eq!(bind_address("8080"), "127.0.0.1:8080");
+        assert_eq!(bind_address("0.0.0.0:9000"), "0.0.0.0:9000");
+        assert_eq!(bind_address("[::1]:9000"), "[::1]:9000");
+    }
 }

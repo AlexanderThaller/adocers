@@ -74,6 +74,27 @@ stylesheets, fonts, PDFs — is served as it is, with a content type guessed fro
 its extension. `.txt` is served as text rather than rendered, even though the
 `include::` directive treats it as AsciiDoc.
 
+### Reading the source
+
+Adding `raw` to the query serves a document's source as plain text instead of
+rendering it:
+
+```
+http://localhost:8080/guide.adoc        # the page
+http://localhost:8080/guide.adoc?raw    # the AsciiDoc behind it
+http://localhost:8080/?raw              # the source of the directory's index document
+```
+
+A bare `?raw` and an explicit `?raw=1` or `?raw=true` mean the same thing;
+`?raw=0` and `?raw=false` mean the page. The flag reaches whichever document
+answers for a directory, so a page and its source are always one query
+parameter apart. Files that are not documents are served the same either way,
+and a directory listing has no source to show, so it ignores the flag.
+
+A raw response is the file on disk, not the preprocessed document: `include::`
+directives appear as written rather than expanded. It carries no reload script,
+being plain text.
+
 Paths are confined to the served directory: a request cannot climb out with
 `..`, and a symlink pointing outside is not followed out. Diagnostics for each
 rendered document go to the terminal, exactly as they do for `render`, so a
