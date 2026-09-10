@@ -44,10 +44,7 @@ impl<'src> Renderer<'src> {
                 .filter(|style| matches!(*style, "square" | "circle" | "disc" | "none"))
         };
 
-        let mut wrapper = block::wrapper_classes(block, "ulist");
-        if let Some(variant) = variant {
-            wrapper.push(variant.to_string());
-        }
+        let wrapper = block::wrapper_classes(block, &["ulist", variant.unwrap_or_default()]);
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
         self.out.open("div", block.id(), &wrapper);
@@ -72,8 +69,7 @@ impl<'src> Renderer<'src> {
     fn ordered_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
         let style = list.marker_style().unwrap_or("arabic");
 
-        let mut wrapper = block::wrapper_classes(block, "olist");
-        wrapper.push(style.to_string());
+        let wrapper = block::wrapper_classes(block, &["olist", style]);
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
         self.out.open("div", block.id(), &wrapper);
@@ -109,8 +105,7 @@ impl<'src> Renderer<'src> {
 
     /// `<1>` callouts, which annotate the listing block above them.
     fn callout_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let mut wrapper = block::wrapper_classes(block, "colist");
-        wrapper.push("arabic".to_string());
+        let wrapper = block::wrapper_classes(block, &["colist", "arabic"]);
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
         self.out.open("div", block.id(), &wrapper);
@@ -183,8 +178,7 @@ impl<'src> Renderer<'src> {
 
     /// `[qanda]`, where each term is a numbered question.
     fn qanda_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let mut wrapper = block::wrapper_classes(block, "qlist");
-        wrapper.push("qanda".to_string());
+        let wrapper = block::wrapper_classes(block, &["qlist", "qanda"]);
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
         self.out.open("div", block.id(), &wrapper);

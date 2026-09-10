@@ -28,16 +28,6 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
-    // Roles are emitted before the classes the block's own shape called for,
-    // where Asciidoctor puts them last.
-    "colist__with-id-and-role",
-    "dlist__qanda-with-id-and-role",
-    "image__with-roles",
-    "olist__with-id-and-role",
-    "stem__with-id-and-role",
-    "stem__with-title",
-    "toc__with-id-and-role",
-    "video__with-id-and-role",
     // Tables: column widths are rounded where Asciidoctor truncates, `float=`
     // is not read, an `h` cell loses its paragraph wrapper, and several
     // paragraphs in one cell are run together into one.
@@ -59,25 +49,24 @@ const KNOWN_FAILURES: &[&str] = &[
     "open__abstract-with-title",
     "stem__asciimath",
     "stem__latexmath",
+    "stem__with-id-and-role",
+    "stem__with-title",
     // Lists: a plain item inside a checklist is given a glyph it should not
     // have, two numeration styles are unrecognized, and a horizontal list
     // ignores its column widths.
     "dlist__horizontal-with-dimensions",
     "olist__with-numeration-styles",
     "ulist__checklist",
-    // The `toc::[]` macro ignores its own attributes, `#toctitle` is missing a
-    // class, and `:toc: preamble` closes a div too early.
+    // The `toc::[]` macro ignores its own attributes — its id, its role, its
+    // title and its levels — `#toctitle` is missing a class, and
+    // `:toc: preamble` closes a div too early.
     "preamble__toc-placement-preamble",
     "toc__doc-without-sections",
     "toc__in-preamble",
     "toc__in-section",
+    "toc__with-id-and-role",
     "toc__with-levels",
     "toc__with-title",
-    // Images ignore `align=` and `float=`; videos ignore `start=` and `end=`.
-    "image__with-align",
-    "image__with-float",
-    "video__with-end",
-    "video__with-start",
     // `:sectanchors:` and `:sectlinks:` are not read at all.
     "section__sectanchors",
     "section__sectanchors-and-sectlinks",

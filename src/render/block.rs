@@ -92,7 +92,7 @@ impl<'src> Renderer<'src> {
 
     /// Open a block wrapper `<div>` with the block's id and class list.
     pub(super) fn open_wrapper(&mut self, block: &'src Block<'src>, context: &str) {
-        let classes = wrapper_classes(block, context);
+        let classes = wrapper_classes(block, &[context]);
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
@@ -238,9 +238,8 @@ impl<'src> Renderer<'src> {
     fn mermaid_block(&mut self, block: &'src Block<'src>, content: &str) {
         self.diagrams = true;
 
-        let classes = wrapper_classes(block, "imageblock");
-        let mut classes: Vec<&str> = classes.iter().map(String::as_str).collect();
-        classes.insert(1, "diagram");
+        let classes = wrapper_classes(block, &["imageblock", "diagram"]);
+        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
         self.out.open("div", None, &["content"]);
@@ -289,7 +288,7 @@ impl<'src> Renderer<'src> {
         // The id goes on the heading, which is what a link to the section
         // should scroll to; putting it on the wrapper as well would make the
         // document contain the same id twice.
-        let classes = wrapper_classes(block, &format!("sect{level}"));
+        let classes = wrapper_classes(block, &[&format!("sect{level}")]);
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", None, &classes);
@@ -507,8 +506,15 @@ impl<'src> Renderer<'src> {
 
 /// The class list for a block wrapper: the context class first, then any roles
 /// the author attached.
-pub(super) fn wrapper_classes<'src>(block: &'src Block<'src>, context: &str) -> Vec<String> {
-    let mut classes = vec![context.to_string()];
+pub(super) fn wrapper_classes<'src>(block: &'src Block<'src>, shape: &[&str]) -> Vec<String> {
+    let mut classes: Vec<String> = shape
+        .iter()
+        .filter(|class| !class.is_empty())
+        .map(|class| (*class).to_string())
+        .collect();
+
+    // The author's roles come last, after every class the block's own shape
+    // called for, which is the order Asciidoctor writes them in.
     classes.extend(block.roles().into_iter().map(str::to_string));
     classes
 }
