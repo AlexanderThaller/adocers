@@ -10,7 +10,7 @@ pub const DEFAULT: &str = r#"
   color-scheme: light dark;
   --bg: #fdfdfd;
   --fg: #1c1e21;
-  --muted: #6a737d;
+  --muted: #656d77;
   --rule: #dcdfe4;
   --accent: #1565a8;
   --code-bg: #f5f6f8;
@@ -22,7 +22,7 @@ pub const DEFAULT: &str = r#"
   --admon-caution: #bf3400;
   --admon-warning: #bf0000;
   /* Syntax highlighting. */
-  --hl-comment: #6a737d;
+  --hl-comment: #656d77;
   --hl-keyword: #cf222e;
   --hl-string: #0a3069;
   --hl-number: #0550ae;
@@ -108,11 +108,20 @@ h4:hover .anchor, h5:hover .anchor, h6:hover .anchor,
 /* `:sectlinks:` makes the heading itself a link, which should still read as a
    heading rather than as something to click. */
 h1 > .link, h2 > .link, h3 > .link, h4 > .link, h5 > .link, h6 > .link {
-  color: inherit; text-decoration: none;
+  color: inherit;
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* A link in a run of text is underlined rather than only coloured. The accent
+   is 2.75:1 against the body colour in the light scheme and 1.76:1 in the dark
+   one, and a reader who does not separate those two colours would have nothing
+   else to go on. Where a whole block is links — the outline, a heading, an
+   image — the underline is noise and comes off again. */
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 0.15em; }
+a:hover { text-decoration-thickness: 2px; }
+#toc a, a.image, a.anchor { text-decoration: none; }
+h1 > .link, h2 > .link, h3 > .link, h4 > .link, h5 > .link, h6 > .link { text-decoration: none; }
+h1 > .link:hover, h2 > .link:hover, h3 > .link:hover, h4 > .link:hover,
+h5 > .link:hover, h6 > .link:hover { text-decoration: underline; }
 
 p { margin: 0 0 1rem; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
