@@ -419,7 +419,10 @@ showcase — 14 pages, five diagrams and a figure — takes about 90 ms.
 This is a second back end rather than a setting on the first (`src/render/typst/`).
 It walks the same block tree and covers the shape of an ordinary document:
 headings, paragraphs, lists, tables with spans and footers, listings, quotes and
-verses, admonitions, images, footnotes, page breaks and cross references.
+verses, admonitions, images, footnotes, page breaks and cross references. A
+`:toc:` becomes a real outline, with page numbers and links to the sections it
+lists, and a listing is highlighted by the syntaxes Typst carries — the same
+code, read by a different highlighter than the page's tree-sitter one.
 Diagrams are drawn into it as vector graphics, so they are as sharp printed as
 they are on screen; `merman` is asked for SVG text labels rather than the
 `<foreignObject>` HTML ones mermaid normally uses, which a browser lays out and

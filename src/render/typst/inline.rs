@@ -253,8 +253,16 @@ fn escape(html: &str) -> String {
 }
 
 /// Quote a value as a Typst string literal.
+///
+/// Line breaks are escaped rather than written, so a whole listing can be one
+/// literal without its own shape ending it.
 pub fn string(text: &str) -> String {
-    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+        .replace('\t', "\\t");
 
     format!("\"{escaped}\"")
 }

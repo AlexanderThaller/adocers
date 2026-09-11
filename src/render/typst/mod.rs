@@ -49,6 +49,7 @@ use asciidoc_parser::{
         QuoteType,
         SectionType,
     },
+    document::TocMode,
 };
 
 use crate::render::typst::inline::{
@@ -75,9 +76,21 @@ pub fn markup(document: &Document<'_>, base: &Path) -> (String, Vec<(String, Vec
         base: base.to_path_buf(),
         images: Vec::new(),
         labels: std::collections::HashSet::new(),
+        toc: Toc::of(document),
     };
 
+    // An outline placed above the content goes between the title block and the
+    // first thing the author wrote, which is where `:toc:` puts it on the page.
+    if emitter.toc.above() {
+        emitter.outline(emitter.toc.levels, &emitter.toc.title.clone());
+    }
+
     emitter.blocks(document.child_blocks());
+
+    if emitter.toc.mode == Some(TocMode::Bottom) {
+        emitter.outline(emitter.toc.levels, &emitter.toc.title.clone());
+    }
+
     emitter.footnotes(document);
     out.push_str(&prune_links(&emitter.out, &emitter.labels));
 
@@ -207,9 +220,78 @@ struct Emitter {
 
     /// Every label emitted, so a reference to one that is not can be found.
     labels: std::collections::HashSet<String>,
+
+    /// How the document asked for its outline, and whether one has been placed.
+    toc: Toc,
+}
+
+/// The table of contents a document asked for.
+#[derive(Clone, Debug)]
+struct Toc {
+    /// Where it goes, or `None` when the document wants none.
+    mode: Option<TocMode>,
+
+    /// The heading above it, empty for no heading at all.
+    title: String,
+
+    /// How many levels of section it lists.
+    levels: usize,
+
+    /// Whether one has been placed, so a second `toc::[]` is ignored the way
+    /// Asciidoctor ignores it.
+    placed: bool,
+}
+
+impl Toc {
+    /// What a document asked for, read the way the page reads it.
+    fn of(document: &Document<'_>) -> Self {
+        let mode = document.toc_mode();
+
+        Self {
+            mode: (mode != TocMode::Disabled).then_some(mode),
+            title: document.toc_title().to_string(),
+            levels: document.toc_levels(),
+            placed: false,
+        }
+    }
+
+    /// Whether the outline goes above the document's content.
+    ///
+    /// The three side placements are a page's idea — a column beside the text —
+    /// and a page of paper has no room for one, so all of them become an
+    /// outline at the front.
+    fn above(&self) -> bool {
+        matches!(
+            self.mode,
+            Some(TocMode::Auto | TocMode::Left | TocMode::Right | TocMode::Top)
+        )
+    }
 }
 
 impl Emitter {
+    /// Write the outline, once.
+    ///
+    /// Typst builds it from the headings themselves and makes every entry a
+    /// link, so this is the whole of it.
+    fn outline(&mut self, levels: usize, title: &str) {
+        if self.toc.placed {
+            return;
+        }
+
+        self.toc.placed = true;
+
+        let title = if title.is_empty() {
+            "none".to_string()
+        } else {
+            format!("[{}]", inline_markup(title))
+        };
+
+        let _ = writeln!(
+            self.out,
+            "#outline(title: {title}, depth: {levels})\n#v(0.5em)\n"
+        );
+    }
+
     /// Render a sequence of blocks.
     fn blocks<'src>(&mut self, blocks: impl Iterator<Item = &'src Block<'src>>) {
         for block in blocks {
@@ -236,12 +318,22 @@ impl Emitter {
                     let _ = writeln!(self.out, "#label({})", string(id));
                 }
 
-                let _ = writeln!(
-                    self.out,
-                    "{} {}\n",
-                    "=".repeat(level),
-                    inline_markup(section.section_title())
-                );
+                // A discrete heading is styled like one but is not a section,
+                // so it does not belong in the outline.
+                if section.section_type() == SectionType::Discrete {
+                    let _ = writeln!(
+                        self.out,
+                        "#heading(level: {level}, outlined: false)[{}]\n",
+                        inline_markup(section.section_title())
+                    );
+                } else {
+                    let _ = writeln!(
+                        self.out,
+                        "{} {}\n",
+                        "=".repeat(level),
+                        inline_markup(section.section_title())
+                    );
+                }
 
                 self.blocks(section.child_blocks());
             }
@@ -256,7 +348,36 @@ impl Emitter {
 
             Block::List(list) => self.list(list),
             Block::Table(table) => self.table(table),
-            Block::Preamble(preamble) => self.blocks(preamble.child_blocks()),
+            Block::Preamble(preamble) => {
+                self.blocks(preamble.child_blocks());
+
+                if self.toc.mode == Some(TocMode::Preamble) {
+                    self.outline(self.toc.levels, &self.toc.title.clone());
+                }
+            }
+
+            // `toc::[]` places the outline where it stands, and may carry a
+            // title and a depth of its own.
+            Block::Toc(toc) => {
+                if self.toc.mode == Some(TocMode::Macro) {
+                    let attrlist = toc.macro_attrlist();
+
+                    let named = |name: &str| {
+                        attrlist
+                            .named_attribute(name)
+                            .map(asciidoc_parser::attributes::ElementAttribute::value)
+                            .filter(|value| !value.is_empty())
+                    };
+
+                    let title =
+                        named("title").map_or_else(|| self.toc.title.clone(), str::to_string);
+                    let levels = named("levels")
+                        .and_then(|levels| levels.parse().ok())
+                        .unwrap_or(self.toc.levels);
+
+                    self.outline(levels, &title);
+                }
+            }
             Block::Admonition(admonition) => self.admonition(admonition),
             Block::Quote(quote) => self.quote(quote),
             Block::Media(media) => self.media(media),
@@ -345,7 +466,15 @@ impl Emitter {
                 );
             }
 
-            _ => self.verbatim(&content),
+            // A listing names its language, which Typst highlights with the
+            // syntaxes it carries; a literal block names none and is set plain.
+            _ => {
+                let language = (raw.raw_context().as_ref() == "listing")
+                    .then(|| source_language(raw))
+                    .flatten();
+
+                self.verbatim_as(&content, language.as_deref());
+            }
         }
     }
 
@@ -394,11 +523,27 @@ impl Emitter {
 
     /// A block of text set exactly as written.
     fn verbatim(&mut self, content: &str) {
-        // A raw block delimited by enough backticks to contain whatever is in
-        // it, so the content needs no escaping of its own.
-        let fence = "`".repeat(longest_backtick_run(content).max(2) + 1);
+        self.verbatim_as(content, None);
+    }
 
-        let _ = writeln!(self.out, "{fence}\n{content}\n{fence}\n");
+    /// The same, highlighted as `language` when one is named.
+    ///
+    /// Typst carries syntect and its syntaxes, so highlighting a listing costs
+    /// nothing but naming the language. The colours are therefore Typst's
+    /// rather than the tree-sitter ones the page uses — the same code, read by
+    /// a different highlighter — and a language neither knows is simply set
+    /// plain.
+    fn verbatim_as(&mut self, content: &str, language: Option<&str>) {
+        let language = match language {
+            Some(language) => format!(", lang: {}", string(language)),
+            None => String::new(),
+        };
+
+        let _ = writeln!(
+            self.out,
+            "#raw({}, block: true{language})\n",
+            string(content)
+        );
     }
 
     /// `====` example, `****` sidebar and `--` open blocks.
@@ -538,11 +683,20 @@ impl Emitter {
             })
             .collect();
 
-        // A numbered list that starts somewhere other than one, or counts
-        // down, says so once before its items and puts it back afterwards.
+        // A numbered list that is lettered, starts somewhere other than one, or
+        // counts down says so once before its items and puts it back after.
         let numbered = list.type_() == ListType::Ordered;
         let start = numbered.then(|| list.start()).flatten();
         let reversed = numbered && list.has_option("reversed");
+
+        let pattern = numbered
+            .then(|| numbering(list))
+            .flatten()
+            .filter(|pattern| *pattern != ARABIC);
+
+        if let Some(pattern) = pattern {
+            let _ = writeln!(self.out, "#set enum(numbering: {})", string(pattern));
+        }
 
         if let Some(start) = start {
             let _ = writeln!(self.out, "#set enum(start: {start})");
@@ -557,7 +711,8 @@ impl Emitter {
 
             let _ = writeln!(
                 self.out,
-                "#set enum(numbering: n => numbering(\"1.\", {highest} - n + 1))"
+                "#set enum(numbering: n => numbering({}, {highest} - n + 1))",
+                string(pattern.unwrap_or(ARABIC))
             );
         }
 
@@ -588,8 +743,8 @@ impl Emitter {
             self.out.push_str("#set enum(start: 1)\n");
         }
 
-        if reversed {
-            self.out.push_str("#set enum(numbering: \"1.\")\n");
+        if reversed || pattern.is_some() {
+            let _ = writeln!(self.out, "#set enum(numbering: {})", string(ARABIC));
         }
 
         self.out.push('\n');
@@ -742,23 +897,6 @@ fn prune_links(markup: &str, labels: &std::collections::HashSet<String>) -> Stri
     out
 }
 
-/// The longest run of backticks in a block, so a fence can be made longer.
-fn longest_backtick_run(content: &str) -> usize {
-    let mut longest = 0;
-    let mut run = 0;
-
-    for c in content.chars() {
-        if c == '`' {
-            run += 1;
-            longest = longest.max(run);
-        } else {
-            run = 0;
-        }
-    }
-
-    longest
-}
-
 /// Whether a block is a diagram that will be drawn, and so captioned beneath.
 #[cfg(feature = "mermaid")]
 fn is_diagram(block: &Block<'_>) -> bool {
@@ -769,6 +907,83 @@ fn is_diagram(block: &Block<'_>) -> bool {
 #[cfg(not(feature = "mermaid"))]
 fn is_diagram(_block: &Block<'_>) -> bool {
     false
+}
+
+/// Typst's pattern for ordinary numbering, which is also what a list is put
+/// back to once one that numbered itself differently has ended.
+const ARABIC: &str = "1.";
+
+/// How an ordered list is numbered, as a Typst numbering pattern.
+///
+/// A declared style says outright; otherwise the marker's depth decides, which
+/// is how AsciiDoc gives a nested list letters without being told to. Both are
+/// read the way the HTML back end reads them, so a list is numbered the same
+/// way in both.
+fn numbering(list: &asciidoc_parser::blocks::ListBlock<'_>) -> Option<&'static str> {
+    let style = list
+        .declared_style()
+        .filter(|style| {
+            matches!(
+                *style,
+                "arabic"
+                    | "decimal"
+                    | "loweralpha"
+                    | "upperalpha"
+                    | "lowerroman"
+                    | "upperroman"
+                    | "lowergreek"
+            )
+        })
+        .or_else(|| list.marker_style())?;
+
+    let pattern = match style {
+        "loweralpha" => "a.",
+        "upperalpha" => "A.",
+        "lowerroman" => "i.",
+        "upperroman" => "I.",
+
+        // `lowergreek` has no pattern of its own here, and numbers rather than
+        // the wrong alphabet is the better of the two wrong answers.
+        _ => ARABIC,
+    };
+
+    Some(pattern)
+}
+
+/// The language a listing declares, under the name Typst's highlighter knows
+/// it by.
+///
+/// The aliases are the ones `render::highlight` resolves, so a `[source,rs]`
+/// block is highlighted here as well as on the page. A name neither of them
+/// knows is passed through: Typst matches on syntax names and file extensions
+/// too, and anything it cannot place is simply set plain.
+fn source_language(raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>) -> Option<String> {
+    if raw.declared_style()? != "source" {
+        return None;
+    }
+
+    let declared = raw
+        .attrlist()?
+        .named_attribute("language")
+        .or_else(|| raw.attrlist()?.nth_attribute(2))
+        .map(asciidoc_parser::attributes::ElementAttribute::value)
+        .filter(|language| !language.is_empty())?
+        .to_lowercase();
+
+    let resolved = match declared.as_str() {
+        "sh" | "shell" | "zsh" | "console" | "terminal" => "bash",
+        "js" | "mjs" | "cjs" | "node" => "javascript",
+        "ts" => "typescript",
+        "py" | "python3" => "python",
+        "rs" => "rust",
+        "golang" => "go",
+        "yml" => "yaml",
+        "htm" | "xhtml" => "html",
+        "jsonc" => "json",
+        _ => return Some(declared),
+    };
+
+    Some(resolved.to_string())
 }
 
 /// Whether a verbatim block was written as a mermaid diagram.
@@ -830,10 +1045,41 @@ mod tests {
     }
 
     #[test]
-    fn fences_a_listing_past_its_own_backticks() {
-        let out = render("= T\n\n----\ncode with ``` in it\n----\n");
+    fn hands_a_listing_its_language_to_highlight() {
+        let out = render("= T\n\n[source,rs]\n----\nfn main() {}\n----\n");
 
-        assert!(out.contains("````"), "{out}");
+        assert!(out.contains("lang: \"rust\""), "{out}");
+    }
+
+    #[test]
+    fn numbers_a_nested_list_the_way_its_depth_says() {
+        let out = render("= T\n\n. one\n.. two\n");
+
+        assert!(out.contains("#set enum(numbering: \"a.\")"), "{out}");
+    }
+
+    #[test]
+    fn places_an_outline_when_the_document_asks_for_one() {
+        let out = render("= T\n:toc:\n:toclevels: 3\n\n== A section\n");
+
+        assert!(
+            out.contains("#outline(title: [Table of Contents], depth: 3)"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn places_no_outline_when_it_was_not_asked_for() {
+        let out = render("= T\n\n== A section\n");
+
+        assert!(!out.contains("#outline"), "{out}");
+    }
+
+    #[test]
+    fn keeps_a_discrete_heading_out_of_the_outline() {
+        let out = render("= T\n:toc:\n\n[discrete]\n== Aside\n\n== A section\n");
+
+        assert!(out.contains("outlined: false"), "{out}");
     }
 
     #[test]
