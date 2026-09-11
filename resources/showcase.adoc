@@ -555,6 +555,20 @@ flowchart LR
 ----
 ------
 
+The diagram is drawn in the browser rather than at build time, so no headless
+browser has to be installed alongside this one. It follows your colour scheme
+and is redrawn if you change it. A diagram is drawn to the width of the column
+and no wider, so it is there to be read rather than to be scrolled at, and it
+narrows with the column on a small screen. Images do the same.
+
+Mermaid draws a good deal more than the four kinds below; these are the ones
+this page has a use for.
+
+=== Flowcharts
+
+Boxes and arrows, laid out left to right with `LR` or top to bottom with `TB`.
+A label on an arrow is written between the dashes.
+
 [mermaid]
 ----
 flowchart LR
@@ -566,13 +580,10 @@ flowchart LR
     PARSE -- warnings --> DIAG[ariadne diagnostics]
 ----
 
-The diagram is drawn in the browser rather than at build time, so no headless
-browser has to be installed alongside this one. It follows your colour scheme
-and is redrawn if you change it. A diagram is drawn to the width of the column
-and no wider, so it is there to be read rather than to be scrolled at, and it
-narrows with the column on a small screen. Images do the same.
+=== Sequence diagrams
 
-A sequence diagram, to show it is not only flowcharts:
+Participants across the top, time down the page, and a message for every arrow
+between them.
 
 [mermaid]
 ----
@@ -613,7 +624,9 @@ sequenceDiagram
     end
 ----
 
-A pie chart needs no arrows at all:
+=== Pie charts
+
+A title and a list of labelled numbers. The percentages are worked out for you.
 
 [mermaid]
 ----
@@ -624,7 +637,9 @@ pie title What a documentation page is made of
     "Diagrams" : 5
 ----
 
-And a git graph draws branches and merges from the commands that made them:
+=== Git graphs
+
+Branches and merges, drawn from the commands that made them.
 
 [mermaid]
 ----
