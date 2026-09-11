@@ -358,6 +358,30 @@ mermaid bakes the theme into the SVG it produces. A diagram is drawn to the
 width of the column and no wider, so it is there to be read rather than to be
 scrolled at, and it narrows with the column on a small screen.
 
+### Drawing diagrams here instead
+
+The `mermaid-svg` feature, off by default, draws diagrams with
+[`merman`](https://crates.io/crates/merman) while the page is being built. A
+page then carries its diagrams as `<svg>` and needs no drawing module at all.
+A diagram `merman` cannot read falls back to the browser, so nothing is lost
+by turning it on.
+
+Measured on the showcase, which has five diagrams, against the same page with
+the module loaded in the browser:
+
+| | module in the browser | drawn here |
+| --- | --- | --- |
+| Transferred | 2,146 KiB | 670 KiB |
+| Total blocking time | 1,470 ms | 330 ms |
+| Speed index | 3.6 s | 1.4 s |
+| Lighthouse performance | 48 | 78 |
+
+It is off by default for three reasons. `merman` is at `0.8.0-alpha.6`. Its
+layout is close to mermaid's but not identical — labels wrap at slightly
+different widths, because the two measure text differently. And it does not
+shrink the binary yet: the vendored mermaid module is still compiled in beside
+it, so the feature adds rather than replaces.
+
 ### Mathematics
 
 A `[stem]`, `[latexmath]` or `[asciimath]` block is an equation, typeset in the

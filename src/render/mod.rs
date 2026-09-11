@@ -45,6 +45,8 @@ mod icons;
 mod list;
 pub mod math;
 mod media;
+#[cfg(feature = "mermaid-svg")]
+mod mermaid;
 mod table;
 mod toc;
 
@@ -136,6 +138,8 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         toc_rendered: false,
         diagrams: false,
         equations: false,
+        #[cfg(feature = "mermaid-svg")]
+        drawings: 0,
     };
 
     let body = renderer.body();
@@ -181,6 +185,11 @@ struct Renderer<'src> {
     /// Whether the document turned out to contain an equation, for the same
     /// reason: only a page that has one loads the typesetting module.
     equations: bool,
+
+    /// How many diagrams have been drawn, so each can be given a name of its
+    /// own. Two elements on a page may not share an id.
+    #[cfg(feature = "mermaid-svg")]
+    drawings: usize,
 }
 
 impl Renderer<'_> {

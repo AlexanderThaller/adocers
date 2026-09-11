@@ -336,6 +336,36 @@ impl<'src> Renderer<'src> {
                 .is_some_and(|language| language.to_lowercase() == "mermaid")
     }
 
+    /// Draw a diagram here, if this build can and `merman` reads it.
+    ///
+    /// `content` is the diagram's source escaped for the page, which is the
+    /// form the browser would have read out of the element; it is turned back
+    /// into source first, exactly as the browser does.
+    ///
+    /// Each diagram gets a name of its own, because the markup carries an id
+    /// and two elements on a page may not share one.
+    #[cfg(feature = "mermaid-svg")]
+    fn drawn(&mut self, content: &str) -> Option<String> {
+        self.drawings += 1;
+
+        let source = content
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&");
+
+        crate::render::mermaid::svg(&source, &format!("diagram-{}", self.drawings))
+    }
+
+    /// Never draws: `merman` is not compiled in.
+    #[cfg(not(feature = "mermaid-svg"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the other half of this pair keeps a counter, and both are called the same way"
+    )]
+    fn drawn(&mut self, _content: &str) -> Option<String> {
+        None
+    }
+
     /// Whether a stem block holds LaTeX rather than `AsciiMath`.
     ///
     /// `[latexmath]` and `[asciimath]` say so outright; a plain `[stem]` takes
@@ -399,19 +429,26 @@ impl<'src> Renderer<'src> {
     /// Asciidoctor centres the diagram and puts its caption underneath, the way
     /// it would for a diagram that had been rendered to an image.
     fn mermaid_block(&mut self, block: &'src Block<'src>, content: &str) {
-        self.diagrams = true;
-
         let classes = wrapper_classes(block, &["imageblock", "diagram"]);
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
         self.out.open("div", None, &["content"]);
 
-        // `content` is already escaped, which is what mermaid needs: the
-        // browser turns `--&gt;` back into `-->` when the script reads the
-        // element's text, and an unescaped `<` would have ended the element.
-        self.out
-            .line(&format!("<pre class=\"mermaid\">{content}</pre>"));
+        // Drawn here if this build can and the diagram is one it understands.
+        // A diagram it declines falls through to the browser, which is where
+        // every diagram used to be drawn.
+        if let Some(svg) = self.drawn(content) {
+            self.out.line(&svg);
+        } else {
+            self.diagrams = true;
+
+            // `content` is already escaped, which is what mermaid needs: the
+            // browser turns `--&gt;` back into `-->` when the script reads the
+            // element's text, and an unescaped `<` would have ended the element.
+            self.out
+                .line(&format!("<pre class=\"mermaid\">{content}</pre>"));
+        }
 
         self.out.close("div");
 
