@@ -162,8 +162,10 @@ const FITTED: &str = "#let fitted(body) = layout(size => {\n\x20 let natural = \
 ///
 /// The same circled characters, so an item and the line it annotates read as
 /// the same mark; above twenty there is none, and the plain number stands.
-const CALLOUT: &str = "#let adoccallout(n) = if n <= 20 { str.from-unicode(0x245F + n) } else { \
-                       numbering(\"(1)\", n) }";
+const CALLOUT: &str = "#let adoccallout(n) = if n <= 10 { str.from-unicode(0x2775 + n) } else if \
+                       n <= 20 { str.from-unicode(0x24E0 + n) } else { numbering(\"(1)\", n) \
+                       }\n#show regex(\"[\\u{2776}-\\u{277F}\\u{24EB}-\\u{24F4}]\"): it => \
+                       text(fill: rgb(\"#1565a8\"), size: 1.35em, baseline: 0.12em)[#it]";
 
 /// The `footnote:[]` definitions, and the helper that places one.
 ///
@@ -195,6 +197,160 @@ fn footnotes(document: &Document<'_>) -> String {
     )
 }
 
+/// What the document says about itself, as the properties a PDF carries.
+///
+/// A reader's viewer shows these in its document-properties panel, and a search
+/// index reads them, so the header's facts are worth writing down there as well
+/// as on the first page.
+fn properties(document: &Document<'_>, title: &str) -> String {
+    let mut out = format!("title: {}", string(title));
+
+    let authors: Vec<String> = document
+        .authors()
+        .iter()
+        .map(|author| string(author.name()))
+        .collect();
+
+    if !authors.is_empty() {
+        let _ = write!(out, ", author: ({},)", authors.join(", "));
+    }
+
+    if let Some(description) = attribute(document, "description") {
+        let _ = write!(out, ", description: {}", string(&description));
+    }
+
+    let keywords: Vec<String> = ["keywords", "page-tags"]
+        .iter()
+        .filter_map(|name| attribute(document, name))
+        .flat_map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|word| !word.is_empty())
+                .map(string)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    if !keywords.is_empty() {
+        let _ = write!(out, ", keywords: ({},)", keywords.join(", "));
+    }
+
+    // A date Typst cannot read is left out rather than guessed at: `auto` would
+    // silently stamp the PDF with the day it was built.
+    match attribute(document, "revdate").as_deref().and_then(date) {
+        Some(date) => {
+            let _ = write!(out, ", date: {date}");
+        }
+
+        None => out.push_str(", date: none"),
+    }
+
+    out
+}
+
+/// A `YYYY-MM-DD` date, as a Typst `datetime`.
+fn date(value: &str) -> Option<String> {
+    let mut parts = value.trim().splitn(3, '-');
+
+    let year: i32 = parts.next()?.parse().ok()?;
+    let month: u8 = parts.next()?.parse().ok()?;
+    let day: u8 = parts.next()?.trim().parse().ok()?;
+
+    (1..=12).contains(&month).then_some(())?;
+    (1..=31).contains(&day).then_some(())?;
+
+    Some(format!(
+        "datetime(year: {year}, month: {month}, day: {day})"
+    ))
+}
+
+/// One of the document header's attributes, if it was set to something.
+fn attribute(document: &Document<'_>, name: &str) -> Option<String> {
+    match document.attribute_value(name) {
+        asciidoc_parser::document::InterpretedValue::Value(value) if !value.is_empty() => {
+            Some(value.clone())
+        }
+
+        _ => None,
+    }
+}
+
+/// The labelled lines under the title: who wrote it, which revision it is, and
+/// whatever else the header says about the document.
+///
+/// The same facts the page shows, read the same way — including Antora's
+/// `page-` namespace — so the two headers cannot drift apart.
+fn details(document: &Document<'_>) -> String {
+    let mut out = String::new();
+
+    let authors: Vec<String> = document
+        .authors()
+        .iter()
+        .map(|author| match author.email() {
+            // The angle brackets are the convention a reader knows from a
+            // commit or a mail header, escaped because Typst reads a bare pair
+            // of them as a label.
+            Some(email) => format!(
+                "{} #link(\"mailto:{email}\")[\\<{}\\>]",
+                inline_markup(author.name()),
+                inline_markup(email)
+            ),
+
+            None => inline_markup(author.name()),
+        })
+        .collect();
+
+    if !authors.is_empty() {
+        let label = if authors.len() == 1 {
+            "Author"
+        } else {
+            "Authors"
+        };
+
+        let _ = writeln!(out, "*{label}:* {}\\", authors.join(", "));
+    }
+
+    for (name, label) in [("revnumber", "Version"), ("revdate", "Date")] {
+        if let Some(value) = attribute(document, name) {
+            let _ = writeln!(out, "*{label}:* {}\\", inline_markup(&value));
+        }
+    }
+
+    for attribute in document.header().attributes() {
+        let name = attribute.name().data();
+
+        let Some(shown) = crate::render::displayed_as(name) else {
+            continue;
+        };
+
+        let asciidoc_parser::document::InterpretedValue::Value(value) = attribute.value() else {
+            continue;
+        };
+
+        if value.is_empty() {
+            continue;
+        }
+
+        let _ = writeln!(
+            out,
+            "*{}:* {}\\",
+            crate::render::label_for(shown),
+            inline_markup(value)
+        );
+    }
+
+    // The remark describes the revision rather than naming part of it, so it
+    // reads as its own sentence rather than as another label.
+    if let Some(remark) = attribute(document, "revremark") {
+        let _ = writeln!(out, "{}\\", inline_markup(&remark));
+    }
+
+    // The last line needs no break after it, and a stray one would leave an
+    // empty line under the header.
+    out.trim_end().trim_end_matches('\\').to_string()
+}
+
 /// The page setup and title block that every rendered document opens with.
 struct Preamble(String);
 
@@ -208,12 +364,12 @@ impl Preamble {
 
         let _ = writeln!(
             out,
-            "#set document(title: {})\n#set page(paper: \"a4\", margin: 2.2cm, numbering: \
-             \"1\")\n#set text(size: 10.5pt)\n#set par(justify: true, leading: 0.62em)\n#show \
-             heading: it => block(above: 1.4em, below: 0.7em, it)\n#show link: it => text(fill: \
+            "#set document({})\n#set page(paper: \"a4\", margin: 2.2cm, numbering: \"1\")\n#set \
+             text(size: 10.5pt)\n#set par(justify: true, leading: 0.62em)\n#show heading: it => \
+             block(above: 1.4em, below: 0.7em, it)\n#show link: it => text(fill: \
              rgb(\"#1565a8\"), it)\n#show raw.where(block: true): it => block(\n\x20 width: 100%, \
              fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n{CALLOUT}\n{}\n",
-            string(&title),
+            properties(document, &title),
             FITTED,
             footnotes(document)
         );
@@ -225,17 +381,15 @@ impl Preamble {
                 inline_markup(&title)
             );
 
-            let authors: Vec<String> = document
-                .authors()
-                .iter()
-                .map(|author| inline_markup(author.name()))
-                .collect();
+            let details = details(document);
 
-            if !authors.is_empty() {
+            if !details.is_empty() {
+                // The same labelled lines the page carries, set small and grey
+                // so the document's own first words are what the eye lands on.
                 let _ = writeln!(
                     out,
-                    "#align(center)[#text(size: 10pt)[{}]]",
-                    authors.join(", ")
+                    "#align(center)[#block(width: 80%)[#set text(size: 9pt, fill: \
+                     rgb(\"#656d77\"))\n#set align(center)\n{details}]]"
                 );
             }
 
@@ -1025,15 +1179,22 @@ fn is_diagram(_block: &Block<'_>) -> bool {
 /// The markup the parser renders a callout marker as, up to its number.
 const CONUM: &str = "<b class=\"conum\">(";
 
-/// A number in a circle, for the callouts a listing and its list share.
+/// A number in a filled circle, for the callouts a listing and its list share.
 ///
-/// The characters run from one to twenty and stop, so anything past that has
-/// none and keeps the number the parser wrote.
+/// The character is the mark: a disc with the numeral knocked out of it, which
+/// is the page's mark as well — there a circle drawn by the stylesheet, here a
+/// glyph, and both blue with the paper showing through the number.
+///
+/// Unicode has these for one to twenty and no further, in two runs, so anything
+/// past twenty has no mark and keeps the number the parser wrote.
 fn circled(number: u32) -> Option<char> {
-    (1..=20)
-        .contains(&number)
-        .then(|| char::from_u32(0x245f + number))
-        .flatten()
+    let point = match number {
+        1..=10 => 0x2775 + number,
+        11..=20 => 0x24e0 + number,
+        _ => return None,
+    };
+
+    char::from_u32(point)
 }
 
 /// The colour an admonition's mark is drawn in.
@@ -1283,7 +1444,7 @@ mod tests {
         let out = render("= T\n\n----\ncode <1>\n----\n<1> Why.\n");
 
         assert!(
-            out.contains('\u{2460}'),
+            out.contains('\u{2776}'),
             "the listing keeps its mark: {out}"
         );
         assert!(out.contains("adoccallout"), "and so does its list: {out}");

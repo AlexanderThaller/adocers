@@ -460,6 +460,11 @@ code, read by a different highlighter than the page's tree-sitter one; and a
 landed on. Callout marks are the same circled numbers the page draws, as
 characters rather than drawings, so they sit in the line of code where the
 marker was.
+
+What the header says about the document is written twice: as the labelled lines
+under the title, the same ones the page carries, and as the PDF's own
+properties — title, author, description, keywords and date — which is what a
+viewer's document-properties panel and a search index read.
 Diagrams are drawn into it as vector graphics, so they are as sharp printed as
 they are on screen; `merman` is asked for SVG text labels rather than the
 `<foreignObject>` HTML ones mermaid normally uses, which a browser lays out and
