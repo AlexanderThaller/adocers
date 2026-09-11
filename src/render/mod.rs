@@ -129,6 +129,12 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
 
     let body = renderer.body();
 
+    // The parser marks an inline equation with the delimiters a typesetter used
+    // to look for. Nothing looks for them now, so they are converted here, over
+    // the whole body at once — an equation can sit in a paragraph, a heading, a
+    // list item or a table cell, and this catches all of them in one place.
+    let body = inline_equations(&body);
+
     let html = if options.fragment {
         body
     } else {
@@ -136,6 +142,18 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
     };
 
     Rendered { html }
+}
+
+/// Convert the inline equations in a rendered body.
+#[cfg(feature = "math")]
+fn inline_equations(body: &str) -> String {
+    math::inline(body)
+}
+
+/// Leaves them as they are: no converter is compiled in.
+#[cfg(not(feature = "math"))]
+fn inline_equations(body: &str) -> String {
+    body.to_string()
 }
 
 /// Walks the block tree, appending markup as it goes.

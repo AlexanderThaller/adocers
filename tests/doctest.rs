@@ -31,7 +31,10 @@ const KNOWN_FAILURES: &[&str] = &[
     // Deliberate. Asciidoctor hands an equation to the reader as the notation
     // it was written in, wrapped in delimiters for MathJax to find and rewrite.
     // This renderer converts it to `MathML` instead, which the browser draws
-    // itself — so a page carries the equation rather than a typesetter.
+    // itself — so a page carries the equation rather than a typesetter. The
+    // same goes for an equation inside a line of text.
+    "inline_quoted__asciimath",
+    "inline_quoted__latexmath",
     "stem__asciimath",
     "stem__latexmath",
     "stem__with-id-and-role",

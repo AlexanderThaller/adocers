@@ -44,14 +44,115 @@ pub fn mathml(source: &str, notation: Notation) -> Option<String> {
         return None;
     }
 
+    convert(source, notation, MathDisplay::Block)
+}
+
+/// Convert one equation, displayed or in a line of text.
+fn convert(source: &str, notation: Notation, display: MathDisplay) -> Option<String> {
+    let source = source.trim();
+
+    if source.is_empty() {
+        return None;
+    }
+
     match notation {
-        Notation::Latex => latex(source),
-        Notation::AsciiMath => ascii(source),
+        Notation::Latex => latex(source, display),
+        Notation::AsciiMath => ascii(source, display),
     }
 }
 
+/// Rewrite the inline equations in a run of rendered markup.
+///
+/// The parser hands an inline `stem:[…]` to the page as the delimiters
+/// `MathJax` used to look for — `\(…\)` for LaTeX, `\$…\$` for `AsciiMath`.
+/// Nothing looks for them now, so they are found and converted here, and a
+/// reader is spared a line with `\$sqrt(4)\$` sitting in it.
+///
+/// Verbatim blocks are left alone. A listing showing `\(` means it, and
+/// rewriting it would be changing what the author wrote.
+pub fn inline(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+
+    while !rest.is_empty() {
+        // Anything up to the next verbatim block can be converted; the block
+        // itself is copied across untouched.
+        let (prose, verbatim) = match rest.find("<pre") {
+            Some(at) => match rest[at..].find("</pre>") {
+                Some(end) => (&rest[..at], &rest[at..at + end + "</pre>".len()]),
+                None => (&rest[..at], &rest[at..]),
+            },
+
+            None => (rest, ""),
+        };
+
+        out.push_str(&convert_all(prose));
+        out.push_str(verbatim);
+
+        rest = &rest[prose.len() + verbatim.len()..];
+    }
+
+    out
+}
+
+/// Convert every delimited equation in one run of prose.
+fn convert_all(prose: &str) -> String {
+    let mut out = String::with_capacity(prose.len());
+    let mut rest = prose;
+
+    while let Some((at, open, close, notation)) = next_equation(rest) {
+        out.push_str(&rest[..at]);
+
+        let body = &rest[at + open.len()..];
+        let Some(end) = body.find(close) else {
+            // An opening delimiter with no closing one is not an equation.
+            out.push_str(&rest[at..at + open.len()]);
+            rest = &rest[at + open.len()..];
+            continue;
+        };
+
+        let source = unescape(&body[..end]);
+        let converted = convert(&source, notation, MathDisplay::Inline);
+
+        match converted {
+            Some(mathml) => out.push_str(&mathml),
+
+            // Left exactly as it arrived, so nothing is lost to a failure.
+            None => out.push_str(&rest[at..at + open.len() + end + close.len()]),
+        }
+
+        rest = &body[end + close.len()..];
+    }
+
+    out.push_str(rest);
+    out
+}
+
+/// The next delimited equation in `prose`, whichever notation comes first.
+fn next_equation(prose: &str) -> Option<(usize, &'static str, &'static str, Notation)> {
+    let latex = prose
+        .find("\\(")
+        .map(|at| (at, "\\(", "\\)", Notation::Latex));
+    let ascii = prose
+        .find("\\$")
+        .map(|at| (at, "\\$", "\\$", Notation::AsciiMath));
+
+    match (latex, ascii) {
+        (Some(l), Some(a)) if a.0 < l.0 => Some(a),
+        (Some(l), _) => Some(l),
+        (None, found) => found,
+    }
+}
+
+/// Turn escaped page text back into the source the author wrote.
+fn unescape(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
 /// LaTeX, which arrives with its own `<math>` wrapper.
-fn latex(source: &str) -> Option<String> {
+fn latex(source: &str, display: MathDisplay) -> Option<String> {
     // The converter carries a macro table, so it is built once and shared.
     static CONVERTER: std::sync::OnceLock<Option<LatexToMathML>> = std::sync::OnceLock::new();
 
@@ -60,7 +161,7 @@ fn latex(source: &str) -> Option<String> {
         .as_ref()?;
 
     converter
-        .convert_with_local_state(source, MathDisplay::Block)
+        .convert_with_local_state(source, display)
         .ok()
         .map(|rendered| rendered.mathml)
 }
@@ -69,14 +170,19 @@ fn latex(source: &str) -> Option<String> {
 ///
 /// The parser answers with an expression tree for anything at all, so an empty
 /// rendering is the only sign that it made nothing of the source.
-fn ascii(source: &str) -> Option<String> {
+fn ascii(source: &str, display: MathDisplay) -> Option<String> {
     let rendered = asciimath_rs::parse(source).to_mathml();
 
     if rendered.trim().is_empty() {
         return None;
     }
 
-    Some(format!("<math display=\"block\">{rendered}</math>"))
+    let attribute = match display {
+        MathDisplay::Block => " display=\"block\"",
+        MathDisplay::Inline => "",
+    };
+
+    Some(format!("<math{attribute}>{rendered}</math>"))
 }
 
 #[cfg(test)]
