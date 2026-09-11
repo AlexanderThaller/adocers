@@ -9,6 +9,7 @@ pub mod cli;
 pub mod diagnostics;
 pub mod includes;
 pub mod job;
+pub mod lint;
 pub mod render;
 #[cfg(feature = "serve")]
 pub mod serve;
@@ -26,6 +27,7 @@ use anyhow::{
 
 use crate::{
     cli::{
+        CheckArgs,
         Cli,
         ColorChoice,
         Command,
@@ -44,6 +46,7 @@ pub fn run(cli: Cli) -> ExitCode {
     let result = match cli.command {
         None => render(&cli.render),
         Some(Command::Render(args)) => render(&args),
+        Some(Command::Check(args)) => check(&args),
 
         #[cfg(feature = "serve")]
         Some(Command::Serve(args)) => serve::run(&args).map(|()| ExitCode::SUCCESS),
@@ -79,6 +82,29 @@ fn render(args: &RenderArgs) -> Result<ExitCode> {
 
     if args.deny_warnings && warnings > 0 {
         eprintln!("adocers: {warnings} warning(s) reported and `--deny-warnings` is in effect");
+
+        return Ok(ExitCode::FAILURE);
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Report every requested document's diagnostics, and fail if there were any
+/// warnings.
+fn check(args: &CheckArgs) -> Result<ExitCode> {
+    let reporter = reporter(&args.common);
+    let mut warnings = 0;
+
+    for input in &args.inputs {
+        warnings += job::check_file(input, &args.common, reporter)?.warnings;
+    }
+
+    if warnings > 0 {
+        if !args.common.quiet {
+            let files = args.inputs.len();
+            let noun = if files == 1 { "file" } else { "files" };
+            eprintln!("adocers: {warnings} warning(s) in {files} {noun}");
+        }
 
         return Ok(ExitCode::FAILURE);
     }

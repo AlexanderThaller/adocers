@@ -60,7 +60,19 @@ adocers -o doc.pdf doc.adoc # writes a PDF instead
 | `-q, --quiet` | Report nothing. |
 | `--color <WHEN>` | `auto` (default), `always` or `never`. |
 
-The last six are shared with `serve`.
+The last six are shared with `serve` and `check`.
+
+## check
+
+```
+adocers check docs/*.adoc
+```
+
+Parses each document and reports its diagnostics exactly as `render` would,
+but writes nothing, and exits non-zero if any warning was reported. This is
+`render --deny-warnings` without the rendering, for a pre-commit hook or a CI
+step that only wants to know whether the documents are in order. `-a`,
+`--safe-mode`, `-v`, `-q` and `--color` apply as they do to `render`.
 
 ## serve
 
@@ -219,6 +231,28 @@ everything the parser has to say is a warning with a source span:
 
 Warnings never stop a render; the HTML is written regardless. Use
 `--deny-warnings` to fail the run instead.
+
+adocers adds a few checks of its own for documents the parser accepted as
+written but that probably do not say what their author meant. They are shown
+the same way, with a `Help:` line saying what to do, and count as warnings.
+
+- `AttributeSetAfterHeader` — an attribute entry sits just after the blank line
+  that ends the document header. It still sets its value, but it is a body
+  attribute now, so the header, and the details shown under the title, do not
+  have it. Remove the blank line between the title and the entry.
+- `ImageNotFound` — an `image::` block or `image:` macro names a file that is
+  not where the document says it is: relative to `:imagesdir:` when that is
+  set, relative to the document otherwise. Asciidoctor writes the `<img>` and
+  never looks. URLs, `data:` URIs and icons are left alone, and so is
+  everything when `:imagesdir:` is itself a URL.
+
+One of the parser's own warnings is also switched on where Asciidoctor keeps
+it off. A reference to an attribute that is not set, `{name}`, is left in the
+text as written, and Asciidoctor's default of `attribute-missing=skip` says
+nothing about it. Here the default is `warn`, so it is reported as
+`SkippingReferenceToMissingAttribute`. A document that means the braces
+literally can say `:attribute-missing: skip` in its header, and
+`-a attribute-missing=skip` does the same from the command line.
 
 Spans are shown against the *preprocessed* source — the document after
 `include::` expansion — which is what the parser measured, so the underline

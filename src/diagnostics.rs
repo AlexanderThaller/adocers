@@ -1,4 +1,4 @@
-//! Presentation of parse diagnostics with `ariadne`.
+//! Presentation of diagnostics with `ariadne`.
 //!
 //! Parsing AsciiDoc never fails — every UTF-8 string is a valid document — so
 //! everything the parser has to say arrives as a [`Warning`] carrying the
@@ -6,10 +6,15 @@
 //! (the document after `include::` expansion), which is exactly the text we
 //! hand to `ariadne`, so the underline always lands on the right bytes. When a
 //! warning came from an included file, its true origin is added as a note.
+//!
+//! adocers has a few things of its own to say about a document the parser
+//! accepted as written (see [`crate::lint`]); a [`Lint`] is shown the same way
+//! and counted as a warning.
 
 use std::{
     io::Write,
     ops::Range,
+    path::Path,
 };
 
 use ariadne::{
@@ -28,6 +33,11 @@ use asciidoc_parser::{
         Warning,
         WarningSeverity,
     },
+};
+
+use crate::lint::{
+    self,
+    Lint,
 };
 
 /// How many diagnostics of each severity a render produced.
@@ -54,36 +64,54 @@ pub struct Reporter {
 }
 
 impl Reporter {
-    /// Report every warning `document` produced, attributing spans to
-    /// `display_name`, and return how many were of each severity.
+    /// Report every warning `document` produced, and every lint adocers has
+    /// about it, attributing spans to `display_name`, and return how many
+    /// were of each severity.
     ///
     /// `display_name` is the path shown in the diagnostic gutter; it is used
-    /// only for display, never to re-read the file.
-    pub fn report(self, document: &Document<'_>, display_name: &str) -> Counts {
+    /// only for display, never to re-read the file. `base` is the directory
+    /// the document was read from, for the lints that look beside it; `None`
+    /// for a document that came from nowhere in particular.
+    pub fn report(
+        self,
+        document: &Document<'_>,
+        display_name: &str,
+        base: Option<&Path>,
+    ) -> Counts {
         let mut counts = Counts::default();
 
         // Every span is an offset into this text, so `ariadne` and the parser
         // agree on where a warning lands even after includes were expanded.
         let source_text = document.span().data();
 
-        // Built on the first warning that is actually shown, not before.
+        // Built on the first diagnostic that is actually shown, not before.
         // `Source::from` indexes every line of the document, which is a whole
         // pass over it, and most renders have nothing to report — or were asked
         // to be quiet about what they do.
         let mut cache: Option<(&str, Source<&str>)> = None;
 
-        for warning in document.warnings() {
-            match warning.severity {
+        let warnings = document.warnings().map(|warning| {
+            let severity = warning.severity;
+            let diagnostic = Diagnostic::warning(document, display_name, warning);
+            (severity, diagnostic)
+        });
+
+        let lints = lint::check(document, base)
+            .into_iter()
+            .map(|lint| (WarningSeverity::Warning, Diagnostic::lint(lint)));
+
+        for (severity, diagnostic) in warnings.chain(lints) {
+            match severity {
                 WarningSeverity::Debug => counts.advice += 1,
                 _ => counts.warnings += 1,
             }
 
-            if self.quiet || (warning.severity == WarningSeverity::Debug && !self.verbose) {
+            if self.quiet || (severity == WarningSeverity::Debug && !self.verbose) {
                 continue;
             }
 
             let cache = cache.get_or_insert_with(|| (display_name, Source::from(source_text)));
-            let report = self.build(document, display_name, source_text, warning);
+            let report = self.build(display_name, source_text, severity, &diagnostic);
             let mut stderr = std::io::stderr().lock();
 
             // A broken pipe on stderr is not worth failing a render over.
@@ -94,21 +122,20 @@ impl Reporter {
         counts
     }
 
-    /// Turn one warning into a laid-out report.
+    /// Turn one diagnostic into a laid-out report.
     fn build<'a>(
         self,
-        document: &Document<'_>,
         display_name: &'a str,
         source_text: &str,
-        warning: &Warning<'_>,
+        severity: WarningSeverity,
+        diagnostic: &Diagnostic<'_>,
     ) -> Report<'a, (&'a str, Range<usize>)> {
-        let kind = match warning.severity {
+        let kind = match severity {
             WarningSeverity::Debug => ReportKind::Advice,
             _ => ReportKind::Warning,
         };
 
-        let range = byte_range(&warning.source, source_text);
-        let message = warning.warning.to_string();
+        let range = byte_range(&diagnostic.source, source_text);
 
         let mut report = Report::build(kind, (display_name, range.clone()))
             .with_config(
@@ -117,15 +144,68 @@ impl Reporter {
                     // Parser spans are byte offsets, not character offsets.
                     .with_index_type(IndexType::Byte),
             )
-            .with_code(code_for(&warning.warning))
-            .with_message(&message)
-            .with_label(Label::new((display_name, range)).with_message(label_for(&message)));
+            .with_code(&diagnostic.code)
+            .with_message(&diagnostic.message)
+            .with_label(Label::new((display_name, range)).with_message(&diagnostic.label));
 
-        if let Some(note) = origin_note(document, warning, display_name) {
+        if let Some(help) = &diagnostic.help {
+            report = report.with_help(help);
+        }
+
+        if let Some(note) = &diagnostic.note {
             report = report.with_note(note);
         }
 
         report.finish()
+    }
+}
+
+/// What a report is built from, whichever side of the parser it came from.
+struct Diagnostic<'src> {
+    /// The span to underline.
+    source: Span<'src>,
+
+    /// The short identifier shown in brackets.
+    code: String,
+
+    /// The sentence shown as the report's headline.
+    message: String,
+
+    /// The terse text shown under the underline.
+    label: String,
+
+    /// What to do about it, if there is advice to give.
+    help: Option<String>,
+
+    /// Where the span really came from, when that is not the file shown.
+    note: Option<String>,
+}
+
+impl<'src> Diagnostic<'src> {
+    /// A parser warning, with its origin note if it came from an include.
+    fn warning(document: &Document<'_>, display_name: &str, warning: &Warning<'src>) -> Self {
+        let message = warning.warning.to_string();
+
+        Self {
+            source: warning.source,
+            code: code_for(&warning.warning),
+            label: label_for(&message),
+            message,
+            help: None,
+            note: origin_note(document, warning, display_name),
+        }
+    }
+
+    /// One of adocers' own checks.
+    fn lint(lint: Lint<'src>) -> Self {
+        Self {
+            source: lint.source,
+            code: lint.code.to_string(),
+            label: label_for(&lint.message),
+            message: lint.message,
+            help: Some(lint.help),
+            note: None,
+        }
     }
 }
 

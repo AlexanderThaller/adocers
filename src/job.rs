@@ -167,30 +167,10 @@ pub fn render_as(
     options: &Options,
     reporter: Reporter,
 ) -> Result<Outcome> {
-    let source =
-        fs::read_to_string(input).with_context(|| format!("reading `{}`", input.display()))?;
-
-    let dependencies = Dependencies::default();
-    dependencies.insert(input.to_path_buf());
-
-    let display_name = input.to_string_lossy().into_owned();
-    let safe_mode = common.safe_mode.into();
-
-    let mut parser = Parser::default()
-        .with_safe_mode(safe_mode)
-        .with_primary_file_name(&display_name)
-        .with_include_file_handler(FsIncludeHandler::new(
-            input,
-            safe_mode,
-            dependencies.clone(),
-        ));
-
-    for attribute in &common.attributes {
-        parser = apply_attribute(parser, attribute);
-    }
-
-    let document = parser.parse(&source);
-    let counts = reporter.report(&document, &display_name);
+    let source = read(input)?;
+    let mut parsed = Parsed::new(input, common);
+    let document = parsed.parser.parse(&source);
+    let counts = reporter.report(&document, &parsed.display_name, input.parent());
 
     let bytes = match format {
         Format::Html => render::render(&document, options).html.into_bytes(),
@@ -200,8 +180,76 @@ pub fn render_as(
     Ok(Outcome {
         bytes,
         counts,
-        dependencies: dependencies.snapshot(),
+        dependencies: parsed.dependencies.snapshot(),
     })
+}
+
+/// Parse one document and report its diagnostics, producing nothing.
+///
+/// This is the front half of [`render_as`], for a `check` that wants to know
+/// what is wrong with a document without paying for — or leaving behind — a
+/// rendering of it.
+pub fn check_file(input: &Path, common: &CommonArgs, reporter: Reporter) -> Result<Counts> {
+    let source = read(input)?;
+    let mut parsed = Parsed::new(input, common);
+    let document = parsed.parser.parse(&source);
+
+    Ok(reporter.report(&document, &parsed.display_name, input.parent()))
+}
+
+/// Read a document's source, naming the file in the error if that fails.
+fn read(input: &Path) -> Result<String> {
+    fs::read_to_string(input).with_context(|| format!("reading `{}`", input.display()))
+}
+
+/// A parser set up for one document, and what it was set up with.
+struct Parsed {
+    /// The parser, configured from the command line and pointed at the
+    /// document's own directory for includes.
+    parser: Parser,
+
+    /// The path shown in diagnostics.
+    display_name: String,
+
+    /// Every file the parse reads; the document itself is already in it.
+    dependencies: Dependencies,
+}
+
+impl Parsed {
+    /// Configure a parser for `input` the way every command does.
+    fn new(input: &Path, common: &CommonArgs) -> Self {
+        let dependencies = Dependencies::default();
+        dependencies.insert(input.to_path_buf());
+
+        let display_name = input.to_string_lossy().into_owned();
+        let safe_mode = common.safe_mode.into();
+
+        let mut parser = Parser::default()
+            .with_safe_mode(safe_mode)
+            .with_primary_file_name(&display_name)
+            .with_include_file_handler(FsIncludeHandler::new(
+                input,
+                safe_mode,
+                dependencies.clone(),
+            ))
+            // A reference to an attribute that is not set is left in the text
+            // as written, `{name}` and all, and Asciidoctor says nothing about
+            // it by default. Here it is a warning, because the reader is the
+            // wrong person to find it. The document can still say
+            // `:attribute-missing: skip` if the braces are meant literally,
+            // and so can the command line.
+            .with_intrinsic_attribute("attribute-missing", "warn", ModificationContext::Anywhere);
+
+        for attribute in &common.attributes {
+            parser = apply_attribute(parser, attribute);
+        }
+
+        Self {
+            parser,
+            display_name,
+            dependencies,
+        }
+    }
 }
 
 /// Typeset a document as a PDF.

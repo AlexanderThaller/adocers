@@ -32,6 +32,9 @@ pub enum Command {
     /// Render documents to HTML files (the default).
     Render(RenderArgs),
 
+    /// Report what is wrong with documents, without rendering them.
+    Check(CheckArgs),
+
     /// Serve a directory over HTTP, rendering documents as they are requested.
     #[cfg(feature = "serve")]
     Serve(ServeArgs),
@@ -139,6 +142,22 @@ pub struct RenderArgs {
     pub deny_warnings: bool,
 
     /// Options shared with `serve`.
+    #[command(flatten)]
+    pub common: CommonArgs,
+}
+
+/// Arguments of the `check` command.
+///
+/// Each `FILE` is parsed and its diagnostics reported, exactly as `render`
+/// would report them, but nothing is written. The run fails if any warning was
+/// reported, which is what makes it useful in a pre-commit hook or a CI step.
+#[derive(Args, Debug)]
+pub struct CheckArgs {
+    /// AsciiDoc files to check.
+    #[arg(value_name = "FILE", required = true)]
+    pub inputs: Vec<PathBuf>,
+
+    /// Options shared with `render`.
     #[command(flatten)]
     pub common: CommonArgs,
 }
