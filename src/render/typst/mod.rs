@@ -23,6 +23,8 @@
 //! a section keeps its words and loses its link, because Typst will not lay out
 //! a document that points at a label it cannot find.
 
+#[cfg(feature = "math")]
+mod ascii;
 mod inline;
 mod math;
 
@@ -414,7 +416,7 @@ fn prose(html: &str, math: bool) -> String {
 
         let source = inline::unescape(&body[..end]);
 
-        match typeset(&source, math && latex) {
+        match typeset(&source, math, latex) {
             Some(converted) => out.push_str(&converted),
             None => {
                 let _ = write!(out, "#raw({})", string(source.trim()));
@@ -440,13 +442,33 @@ fn equation(html: &str) -> Option<(usize, &'static str, &'static str, bool)> {
     }
 }
 
-/// One equation as Typst mathematics, if this run converts them and it is a
-/// notation that can be converted.
-fn typeset(source: &str, convert: bool) -> Option<String> {
-    convert
-        .then(|| math::typst(source))
+/// One equation, as the Typst mathematics of a line of text.
+fn typeset(source: &str, math: bool, latex: bool) -> Option<String> {
+    math.then(|| converted(source, latex))
         .flatten()
         .map(|converted| format!("${converted}$"))
+}
+
+/// One equation as Typst mathematics, whichever notation it is written in.
+fn converted(source: &str, latex: bool) -> Option<String> {
+    if latex {
+        return math::typst(source);
+    }
+
+    asciimath(source)
+}
+
+/// `AsciiMath`, which is converted by the same crate the page's `MathML` comes
+/// from and so needs the feature that brings it.
+#[cfg(feature = "math")]
+fn asciimath(source: &str) -> Option<String> {
+    ascii::typst(source)
+}
+
+/// Never converts: no parser for it is compiled in.
+#[cfg(not(feature = "math"))]
+fn asciimath(_source: &str) -> Option<String> {
+    None
 }
 
 /// The page setup and title block that every rendered document opens with.
@@ -772,18 +794,16 @@ impl Emitter {
         let _ = writeln!(self.out, "#align(center)[#raw({})]\n", string(source));
     }
 
-    /// One equation as Typst mathematics, if this run converts them and the
-    /// notation is one that can be converted.
+    /// One equation as Typst mathematics, if this run converts them.
     fn mathematics(
         &self,
         raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>,
         source: &str,
     ) -> Option<String> {
-        if !self.options.math || !self.is_latex(raw) {
-            return None;
-        }
-
-        math::typst(source)
+        self.options
+            .math
+            .then(|| converted(source, self.is_latex(raw)))
+            .flatten()
     }
 
     /// Whether an equation is written in LaTeX.
@@ -917,11 +937,16 @@ impl Emitter {
 
         let _ = write!(
             self.out,
-            "#grid(\n  columns: (34pt, 1fr),\n  column-gutter: 10pt,\n  align(center + \
-             horizon)[{mark}],\n  block(width: 100%, inset: (left: 11pt), stroke: (left: 1pt + \
-             rgb(\"#dcdfe4\")))[\n"
+            "#grid(\n  columns: (34pt, 1fr),\n  align: (center + horizon, left + horizon),\n  \
+             inset: (x, y) => if x == 1 {{ (left: 11pt, y: 2pt) }} else {{ (right: 10pt) }},\n  \
+             stroke: (x, y) => if x == 1 {{ (left: 1pt + rgb(\"#dcdfe4\")) }} else {{ none }},\n  \
+             [{mark}],\n  [\n"
         );
 
+        // The rule is the grid's own rather than a border on the text: a line
+        // drawn around the content is as short as the content, and beside a
+        // one-line note that is shorter than the mark next to it.
+        //
         // The paragraph form — `TIP: text` — carries its text directly and has
         // no child blocks at all, so asking only for the children loses it.
         match admonition.content() {
@@ -1609,14 +1634,20 @@ mod tests {
     }
 
     #[test]
-    fn typesets_latex_and_leaves_asciimath_as_written() {
+    fn typesets_both_notations() {
         let out = render("= T\n:stem: latexmath\n\n[stem]\n++++\n\\frac{a}{b}\n++++\n");
 
         assert!(out.contains("$ frac(a ,b ) $"), "{out}");
 
-        let plain = render("= T\n\n[stem]\n++++\nsqrt(4)\n++++\n");
+        // `AsciiMath` needs the parser the `math` feature brings; without it
+        // the equation is shown as it was written.
+        let ascii = render("= T\n\n[stem]\n++++\nsqrt(4)\n++++\n");
 
-        assert!(plain.contains("#raw(\"sqrt(4)\")"), "{plain}");
+        if cfg!(feature = "math") {
+            assert!(ascii.contains("$ sqrt(4) $"), "{ascii}");
+        } else {
+            assert!(ascii.contains("#raw(\"sqrt(4)\")"), "{ascii}");
+        }
     }
 
     #[test]

@@ -493,11 +493,20 @@ rendered a second time with all of them shown as their source, and says so on
 standard error: a page of equations written in LaTeX is a far better answer than
 no page at all.
 
-**AsciiMath is not converted**, and is shown as its source. It looks close
-enough to Typst to tempt one into passing it through, and it is not: `int_0^1`
-is an integral in AsciiMath and the name Typst already uses for the whole-number
-type. An equation shown as what the author wrote is honest; one quietly typeset
-wrong is not. Prefer LaTeX if you want your maths set.
+AsciiMath is converted too, and not by passing it through. The two syntaxes
+look close enough to tempt one into it and are not: `int_0^1` is an integral in
+AsciiMath and the name Typst already uses for the whole-number type, `xx` is a
+multiplication sign in one and two variables in the other, and `/` makes a
+fraction of whatever is either side of it. So the equation is parsed —
+`asciimath-rs`, the same crate the page's MathML comes from — and the tree is
+written out as what Typst calls each thing.
+
+`asciimath-rs` is rough in ways that show in both outputs, because both read the
+same tree: `int` comes out as `∈t` and `subset` as `⊂set`, since a shorter
+spelling is matched before a longer one, and `lim` is not among the operators it
+knows. The PDF repairs what it can — a second script on one base, and the
+brackets `sqrt(4)` is written with — but the mis-readings are the parser's, and
+`asciimath-parser` looks like the fix for them. Prefer LaTeX in the meantime.
 
 ### What a PDF leaves behind
 
