@@ -572,9 +572,9 @@ impl Site {
     /// A short page explaining a status, styled like the documents around it.
     fn status_page(&self, status: StatusCode, heading: &str, detail: &str) -> Answer {
         let body = format!(
-            "<div id=\"header\">\n<h1>{}</h1>\n</div>\n<div id=\"content\">\n<div \
+            "<div id=\"header\">\n<h1>{}</h1>\n</div>\n<main id=\"content\">\n<div \
              class=\"paragraph\">\n<p>{}</p>\n</div>\n<div class=\"paragraph\">\n<p><a \
-             href=\"/\">Back to the top</a></p>\n</div>\n</div>\n",
+             href=\"/\">Back to the top</a></p>\n</div>\n</main>\n",
             escape_text(heading),
             escape_text(detail)
         );

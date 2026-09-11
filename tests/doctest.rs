@@ -190,9 +190,16 @@ fn render(name: &str, source: &str) -> String {
 /// The two renderers disagree harmlessly about vertical space — a blank line
 /// inside a `sectionbody`, a trailing newline — and that noise would bury the
 /// differences worth knowing about.
+///
+/// `tabindex="0"` is dropped for the same reason. This back end puts it on
+/// every region that scrolls sideways — a listing, a diagram, an equation — so
+/// that a reader without a mouse can reach the rest of a line that ran off the
+/// page. It is deliberate, it is systematic, and letting it stand would hide
+/// ten real examples behind one decision already made.
 fn normalize(html: &str) -> String {
     html.lines()
         .map(str::trim_end)
+        .map(|line| line.replace(" tabindex=\"0\"", ""))
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")

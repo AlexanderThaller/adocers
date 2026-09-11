@@ -206,11 +206,19 @@ impl Renderer<'_> {
         } else {
             self.header();
 
-            self.out.open("div", Some("content"), &[]);
+            // `<main>`, `<header>` and `<footer>` rather than Asciidoctor's
+            // three `<div>`s: these are the page's landmarks, which an
+            // assistive reader uses to move between the parts of a page instead
+            // of through them. The ids are Asciidoctor's, so a stylesheet
+            // written for it still finds every one of them.
+            //
+            // The footnotes belong to the content and are inside it, rather
+            // than a fourth region belonging to nothing.
+            self.out.open("main", Some("content"), &[]);
             self.content();
-            self.out.close("div");
-
             self.footnotes();
+            self.out.close("main");
+
             self.footer();
         }
 
@@ -252,7 +260,7 @@ impl Renderer<'_> {
             return;
         }
 
-        self.out.open("div", Some("header"), &[]);
+        self.out.open("header", Some("header"), &[]);
 
         if show_title {
             self.doctitle();
@@ -268,7 +276,7 @@ impl Renderer<'_> {
             self.toc();
         }
 
-        self.out.close("div");
+        self.out.close("header");
     }
 
     /// The author and revision lines shown under the document title.
@@ -492,11 +500,11 @@ impl Renderer<'_> {
             return;
         }
 
-        self.out.open("div", Some("footer"), &[]);
+        self.out.open("footer", Some("footer"), &[]);
         self.out.open("div", Some("footer-text"), &[]);
         self.out.line(&lines.join("<br>\n"));
         self.out.close("div");
-        self.out.close("div");
+        self.out.close("footer");
     }
 
     /// Render something into a buffer of its own and hand back the markup.

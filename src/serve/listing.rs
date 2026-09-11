@@ -49,7 +49,7 @@ pub fn page(
     body.push_str("<div id=\"header\">\n");
     let _ = writeln!(body, "<h1>{}</h1>", breadcrumb(url_path));
     body.push_str("</div>\n");
-    body.push_str("<div id=\"content\">\n");
+    body.push_str("<main id=\"content\">\n");
     body.push_str("<div class=\"ulist\">\n<ul>\n");
 
     // A link back out, except at the top of the served tree where there is
@@ -75,7 +75,7 @@ pub fn page(
         body.push_str("<div class=\"paragraph\">\n<p>This directory is empty.</p>\n</div>\n");
     }
 
-    body.push_str("</div>\n");
+    body.push_str("</main>\n");
 
     Ok(crate::render::page(
         &Page {

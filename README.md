@@ -406,6 +406,23 @@ if you write much of it.
 what happens to one neither converter can read. `math` is a default-on feature;
 without it nothing is converted.
 
+### Accessibility
+
+The page is laid out in landmarks — `<header>`, `<main>` and `<footer>`, each
+keeping the id Asciidoctor gives its `<div>`, so a stylesheet written for
+Asciidoctor still finds them. Footnotes sit inside the main content rather than
+in a fourth region belonging to nothing.
+
+A region that scrolls sideways rather than running off a narrow page — a
+listing, a diagram, an equation — carries `tabindex="0"`, because a scrolling
+region with nothing focusable in it is one a keyboard cannot reach into. One tab
+stop is the price of the rest of the line being readable.
+
+Colours meet WCAG AA against both schemes, links are underlined rather than
+distinguished by colour alone, and every admonition icon carries its label as an
+accessible name. `axe-core` reports no violations on the showcase across
+`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and its best-practice rules.
+
 ### Security
 
 The HTML renderer is not an HTML sanitizer, and AsciiDoc deliberately lets a

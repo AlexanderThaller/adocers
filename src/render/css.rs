@@ -205,7 +205,8 @@ pre code { background: none; padding: 0; }
    figure does, and a long one scrolls rather than pushing the column wide. Until
    a maths renderer is loaded into the page it shows its own delimiters, which is
    the honest thing for it to show. */
-.stemblock { margin: 1.5rem 0; text-align: center; overflow-x: auto; }
+.stemblock { margin: 1.5rem 0; text-align: center; }
+.stemblock > .content { overflow-x: auto; }
 
 /* Admonitions, laid out as Asciidoctor lays them out: a wide centred icon
    column, a rule between it and the text, and no box around the whole thing. */

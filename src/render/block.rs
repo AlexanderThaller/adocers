@@ -192,7 +192,12 @@ impl<'src> Renderer<'src> {
 
                 self.open_wrapper(block, "stemblock");
                 self.block_title(block);
-                self.out.open("div", None, &["content"]);
+
+                // An equation cannot be broken across lines, so a wide one
+                // scrolls rather than running off the page — and something that
+                // scrolls has to be reachable from the keyboard, or a reader
+                // who does not use a mouse cannot see the rest of it.
+                self.out.line(&format!("<div class=\"content\"{SCROLLS}>"));
                 self.out.line(&body);
                 self.out.close("div");
                 self.out.close("div");
@@ -472,7 +477,7 @@ impl<'src> Renderer<'src> {
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
-        self.out.open("div", None, &["content"]);
+        self.out.line(&format!("<div class=\"content\"{SCROLLS}>"));
         self.out.line(&svg);
         self.out.close("div");
 
@@ -861,8 +866,16 @@ fn nowrap<'src>(block: &'src Block<'src>) -> &'static str {
 /// empty string when the block asked for nothing.
 fn pre_class<'src>(block: &'src Block<'src>) -> &'static str {
     if block.has_option("nowrap") {
-        " class=\"nowrap\""
+        concat!(" class=\"nowrap\"", " tabindex=\"0\"")
     } else {
-        ""
+        SCROLLS
     }
 }
+
+/// What a scrolling region needs to be reachable without a mouse.
+///
+/// A listing, a diagram and an equation all scroll sideways rather than running
+/// off a narrow page, and a region that scrolls and holds nothing focusable is
+/// one a keyboard cannot reach into. One tab stop is the price of the rest of
+/// the line being readable.
+const SCROLLS: &str = " tabindex=\"0\"";
