@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["serve", "highlight", "math"]
-serve = ["dep:axum", "dep:tokio", "dep:tokio-util"]
+serve = ["dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower-http"]
 
 # MathJax, vendored so a page with equations needs no network. It is 2.2 MB of
 # JavaScript compiled into the binary, which is the whole cost of the feature.
@@ -31,6 +31,7 @@ highlight = [
   "dep:tree-sitter-css",
   "dep:tree-sitter-java",
 ]
+tower-http = ["dep:tower-http"]
 
 [dependencies]
 anyhow = "1"
@@ -53,6 +54,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-util = { version = "0.7", default-features = false, features = [
   "io",
 ], optional = true }
+tower-http = { version = "0.7.1", features = ["compression-gzip", "compression-br"], optional = true }
 tree-sitter = { version = "0.27", optional = true }
 tree-sitter-bash = { version = "0.25", optional = true }
 tree-sitter-c = { version = "0.24", optional = true }

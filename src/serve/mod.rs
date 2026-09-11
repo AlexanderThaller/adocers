@@ -46,6 +46,8 @@ use axum::{
 use tokio::net::TcpListener;
 use tokio_util::io::ReaderStream;
 
+use tower_http::compression::CompressionLayer;
+
 use crate::{
     cli::{
         CommonArgs,
@@ -173,7 +175,15 @@ async fn listen(site: Arc<Site>, address: &str) -> Result<()> {
         eprintln!("adocers: live reload is off");
     }
 
-    let app = Router::new().fallback(handle).with_state(site);
+    // Compression is not an optimization here so much as a correction: the
+    // vendored drawing module is 5.6 MB of JavaScript and compresses to about
+    // a fifth of that. A reverse proxy in front of this would usually do it,
+    // but a tool that can be run on its own should not need one to be
+    // reasonable about what it puts on the wire.
+    let app = Router::new()
+        .fallback(handle)
+        .layer(CompressionLayer::new())
+        .with_state(site);
 
     axum::serve(listener, app)
         .with_graceful_shutdown(interrupted())

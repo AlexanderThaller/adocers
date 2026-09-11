@@ -140,6 +140,21 @@ renewing. So a change reaches the browser as soon as the file system reports it,
 with no polling in between, and a page that loses its connection backs off and
 recovers on its own.
 
+### Compression
+
+Responses are compressed when the client asks for it, brotli or gzip. That
+matters more than it usually would: the vendored drawing module is 5.6 MB of
+JavaScript and comes down to about 1.5 MB, and a rendered page of any size is
+mostly repetitive markup. A reverse proxy in front of this would normally do
+the same thing, and doing it in both places is harmless — whichever sees an
+`Accept-Encoding` first handles it.
+
+Measured against the showcase, which carries both the drawing module and the
+typesetter, a mobile Lighthouse run went from 7,665 KiB to 2,146 KiB
+transferred and from a performance score of 69 to 75. What compression cannot
+help is the time the browser spends *running* that JavaScript, which is most of
+what is left.
+
 ### Health checks
 
 `GET /healthz` answers `200 ok` while the server is fit to take traffic, and
