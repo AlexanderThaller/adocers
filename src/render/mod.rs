@@ -639,6 +639,12 @@ pub fn page(page: &Page<'_>, body: &str) -> String {
 
     out.line(&format!("<title>{}</title>", escape_text(page.title)));
 
+    // A browser asks for `/favicon.ico` on every page whatever the document
+    // says, and a rendered page rarely has one to give — leaving a 404 in the
+    // console and a wasted request on every visit. Saying there is none is
+    // quieter than letting it look for one.
+    out.line("<link rel=\"icon\" href=\"data:,\">");
+
     if let Some(css) = page.stylesheet {
         out.line("<style>");
         out.line(css);
