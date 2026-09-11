@@ -19,6 +19,9 @@
 //!   labels, backgrounds. The *data* colours are left alone, because the slices
 //!   of a pie and the branches of a git graph are telling the reader something
 //!   and are not the page's to recolour.
+//!
+//! A diagram bound for a PDF takes neither correction and one of its own: see
+//! [`printable`].
 
 use merman::{
     OperationControl,
@@ -26,6 +29,7 @@ use merman::{
     RenderRequest,
     Renderer,
     SvgRequest,
+    svg::SvgPipeline,
 };
 
 /// The page's own colours, applied to the parts of a diagram that are chrome
@@ -66,19 +70,40 @@ const THEME: &str =
 ///
 /// `id` has to be unique within the page.
 pub fn svg(source: &str, id: &str) -> Option<String> {
+    Some(adapt(&draw(source, SvgRequest::default())?, id))
+}
+
+/// Draw `source` for something that is not a browser.
+///
+/// Mermaid sets its labels in `<foreignObject>`, which is HTML inside the SVG
+/// and needs a browser to lay out. `merman` can put SVG text there instead, at
+/// the cost of exact parity, which is the difference between a diagram of
+/// labelled boxes and a diagram of empty ones once it reaches a PDF.
+///
+/// The colours are left as mermaid drew them. The page's palette follows the
+/// reader's colour scheme and a printed page has no reader to follow.
+#[cfg(feature = "pdf")]
+pub fn printable(source: &str) -> Option<String> {
+    draw(
+        source,
+        SvgRequest {
+            pipeline: Some(SvgPipeline::resvg_safe()),
+            ..SvgRequest::default()
+        },
+    )
+}
+
+/// One render, however it was asked for.
+fn draw(source: &str, request: SvgRequest) -> Option<String> {
     let output = Renderer::new()
-        .render(RenderRequest::svg(
-            source,
-            OperationControl::new(),
-            SvgRequest::default(),
-        ))
+        .render(RenderRequest::svg(source, OperationControl::new(), request))
         .ok()?;
 
     let RenderOutput::Svg(Some(rendered)) = output else {
         return None;
     };
 
-    Some(adapt(rendered.svg(), id))
+    Some(rendered.svg().to_string())
 }
 
 /// Rename the diagram and remap its chrome onto the page's colours.
@@ -147,6 +172,17 @@ mod tests {
             !svg.contains("background-color: white"),
             "a light background would be wrong on a dark page"
         );
+    }
+
+    #[cfg(feature = "pdf")]
+    #[test]
+    fn sets_a_printed_diagram_s_labels_in_svg() {
+        let svg = printable("flowchart LR\n  A[one] --> B[two]").expect("renders");
+
+        // HTML labels need a browser to lay out, and a PDF has none, so a
+        // diagram carrying them would print as empty boxes.
+        assert!(!svg.contains("foreignObject"), "labels should be SVG text");
+        assert!(svg.contains("one") && svg.contains("two"));
     }
 
     #[test]

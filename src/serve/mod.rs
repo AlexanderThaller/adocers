@@ -442,7 +442,10 @@ impl Site {
         };
 
         match job::render_file(target, &self.common, &options, self.reporter) {
-            Ok(outcome) => Answer::html(StatusCode::OK, outcome.html),
+            Ok(outcome) => Answer::html(
+                StatusCode::OK,
+                String::from_utf8_lossy(&outcome.bytes).into_owned(),
+            ),
 
             // The document exists but could not be read. Reporting it as a page
             // rather than a bare 500 means the reload script is on it, so

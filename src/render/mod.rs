@@ -49,6 +49,8 @@ mod media;
 mod mermaid;
 mod table;
 mod toc;
+#[cfg(feature = "pdf")]
+pub mod typst;
 
 use asciidoc_parser::{
     Document,

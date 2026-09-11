@@ -6,12 +6,16 @@ description = "Render AsciiDoc documents to HTML, with source-anchored diagnosti
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["serve", "highlight", "math", "mermaid"]
+default = ["serve", "highlight", "math", "mermaid", "pdf"]
 serve = ["dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower-http"]
 
 # Draw mermaid diagrams, with `merman`. Without it a diagram renders as the
 # listing block it was written as.
 mermaid = ["dep:merman"]
+
+# PDF output, typeset by Typst — which is Rust, so a PDF needs no LaTeX, no
+# headless browser and nothing fetched. Typst's own fonts come with it.
+pdf = ["dep:typst", "dep:typst-as-lib", "dep:typst-pdf"]
 
 # Equations, converted to MathML for the browser to draw. Without it an
 # equation renders as the notation it was written in.
@@ -80,6 +84,9 @@ tree-sitter-rust = { version = "0.24", optional = true }
 tree-sitter-toml-ng = { version = "0.7", optional = true }
 tree-sitter-typescript = { version = "0.23", optional = true }
 tree-sitter-yaml = { version = "0.7", optional = true }
+typst = { version = "0.15", optional = true }
+typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"], optional = true }
+typst-pdf = { version = "0.15", optional = true }
 
 [[bench]]
 name = "render"

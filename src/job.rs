@@ -38,6 +38,16 @@ use crate::{
     },
 };
 
+/// What a job produces.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Format {
+    /// A rendered HTML page.
+    Html,
+
+    /// A PDF, typeset by Typst.
+    Pdf,
+}
+
 /// Where a rendered document is written.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Destination {
@@ -54,6 +64,9 @@ pub struct Job {
     /// The AsciiDoc file to read.
     pub input: PathBuf,
 
+    /// What to produce, which the output path's extension decides.
+    pub format: Format,
+
     /// Where to put the result.
     pub destination: Destination,
 }
@@ -61,8 +74,8 @@ pub struct Job {
 /// What one render produced.
 #[derive(Clone, Debug)]
 pub struct Outcome {
-    /// The rendered HTML.
-    pub html: String,
+    /// What was rendered: HTML as bytes, or a PDF.
+    pub bytes: Vec<u8>,
 
     /// Diagnostics reported for the document.
     pub counts: Counts,
@@ -74,7 +87,7 @@ pub struct Outcome {
     pub dependencies: Vec<PathBuf>,
 }
 
-/// Work out where each input's HTML should go.
+/// Work out what each input becomes and where it should go.
 pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
     let single = args.inputs.len() == 1;
 
@@ -85,11 +98,24 @@ pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
         );
     }
 
+    // The extension asked for decides what is produced. `--pdf` is not a flag
+    // because `-o guide.pdf` already says it, and two ways of saying one thing
+    // is one way too many.
+    let format = match &args.output {
+        Some(output) => format_for(output),
+        None => Format::Html,
+    };
+
+    let extension = match format {
+        Format::Html => "html",
+        Format::Pdf => "pdf",
+    };
+
     let mut jobs = Vec::with_capacity(args.inputs.len());
 
     for input in &args.inputs {
         let destination = match &args.output {
-            None => Destination::File(html_sibling(input)),
+            None => Destination::File(input.with_extension(extension)),
 
             Some(output) if output == Path::new("-") => Destination::Stdout,
 
@@ -102,7 +128,7 @@ pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
                         format!("creating output directory `{}`", output.display())
                     })?;
 
-                    Destination::File(output.join(html_name(input)?))
+                    Destination::File(output.join(output_name(input, extension)?))
                 } else {
                     Destination::File(output.clone())
                 }
@@ -111,6 +137,7 @@ pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
 
         jobs.push(Job {
             input: input.clone(),
+            format,
             destination,
         });
     }
@@ -125,6 +152,17 @@ pub fn plan(args: &RenderArgs) -> Result<Vec<Job>> {
 /// straight back to the browser.
 pub fn render_file(
     input: &Path,
+    common: &CommonArgs,
+    options: &Options,
+    reporter: Reporter,
+) -> Result<Outcome> {
+    render_as(input, Format::Html, common, options, reporter)
+}
+
+/// Parse and render one document in the format asked for.
+pub fn render_as(
+    input: &Path,
+    format: Format,
     common: &CommonArgs,
     options: &Options,
     reporter: Reporter,
@@ -153,13 +191,29 @@ pub fn render_file(
 
     let document = parser.parse(&source);
     let counts = reporter.report(&document, &display_name);
-    let rendered = render::render(&document, options);
+
+    let bytes = match format {
+        Format::Html => render::render(&document, options).html.into_bytes(),
+        Format::Pdf => typeset(&document, input.parent().unwrap_or(Path::new(".")))?,
+    };
 
     Ok(Outcome {
-        html: rendered.html,
+        bytes,
         counts,
         dependencies: dependencies.snapshot(),
     })
+}
+
+/// Typeset a document as a PDF.
+#[cfg(feature = "pdf")]
+fn typeset(document: &asciidoc_parser::Document<'_>, base: &Path) -> Result<Vec<u8>> {
+    render::typst::pdf(document, base)
+}
+
+/// Refuse politely: no typesetter is compiled in.
+#[cfg(not(feature = "pdf"))]
+fn typeset(_document: &asciidoc_parser::Document<'_>, _base: &Path) -> Result<Vec<u8>> {
+    anyhow::bail!("this build cannot write PDFs: it was built without the `pdf` feature")
 }
 
 /// Render one document and put it where the job says.
@@ -169,14 +223,14 @@ pub fn run(
     options: &Options,
     reporter: Reporter,
 ) -> Result<Outcome> {
-    let outcome = render_file(&job.input, common, options, reporter)?;
-    let html = &outcome.html;
+    let outcome = render_as(&job.input, job.format, common, options, reporter)?;
+    let bytes = &outcome.bytes;
 
     match &job.destination {
         Destination::Stdout => {
             let mut stdout = std::io::stdout().lock();
             stdout
-                .write_all(html.as_bytes())
+                .write_all(bytes)
                 .context("writing to standard output")?;
             stdout.flush().context("writing to standard output")?;
         }
@@ -187,7 +241,7 @@ pub fn run(
                     .with_context(|| format!("creating `{}`", parent.display()))?;
             }
 
-            fs::write(path, html).with_context(|| format!("writing `{}`", path.display()))?;
+            fs::write(path, bytes).with_context(|| format!("writing `{}`", path.display()))?;
         }
     }
 
@@ -219,18 +273,25 @@ fn apply_attribute(parser: Parser, argument: &str) -> Parser {
     }
 }
 
-/// `foo.adoc` becomes `foo.html`, beside the original.
-fn html_sibling(input: &Path) -> PathBuf {
-    input.with_extension("html")
+/// What an output path asks to be produced.
+///
+/// Only a file named `.pdf` is a PDF; everything else, a directory included, is
+/// the HTML this tool has always produced.
+fn format_for(output: &Path) -> Format {
+    match output.extension().and_then(|e| e.to_str()) {
+        Some(extension) if extension.to_lowercase() == "pdf" => Format::Pdf,
+        _ => Format::Html,
+    }
 }
 
-/// The bare `foo.html` name for an input, for use inside an output directory.
-fn html_name(input: &Path) -> Result<PathBuf> {
+/// The bare `foo.html` or `foo.pdf` name for an input, for use inside an
+/// output directory.
+fn output_name(input: &Path, extension: &str) -> Result<PathBuf> {
     let stem = input
         .file_stem()
         .with_context(|| format!("`{}` has no file name", input.display()))?;
 
-    Ok(PathBuf::from(stem).with_extension("html"))
+    Ok(PathBuf::from(stem).with_extension(extension))
 }
 
 /// Whether a path should be treated as a directory to render into.

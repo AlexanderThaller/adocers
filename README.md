@@ -1,12 +1,13 @@
 # adocers
 
-Render AsciiDoc documents to HTML from the command line.
+Render AsciiDoc documents to HTML — or to PDF — from the command line.
 
 Parsing is done by [`asciidoc-parser`](https://github.com/asciidoc-rs/asciidoc-parser).
 Diagnostics are drawn against the source with
 [`ariadne`](https://codeberg.org/zesterer/ariadne). The command line is
-[`clap`](https://github.com/clap-rs/clap), and `serve` is built on
-[`axum`](https://github.com/tokio-rs/axum).
+[`clap`](https://github.com/clap-rs/clap), `serve` is built on
+[`axum`](https://github.com/tokio-rs/axum), and PDFs are typeset by
+[Typst](https://typst.app).
 
 ## Usage
 
@@ -36,6 +37,7 @@ Each input is rendered to a sibling `.html` file:
 adocers doc.adoc            # writes doc.html
 adocers -o build/ *.adoc    # writes build/<name>.html for each input
 adocers -o - doc.adoc       # writes to standard output
+adocers -o doc.pdf doc.adoc # writes a PDF instead
 ```
 
 ### Options
@@ -339,6 +341,11 @@ different widths, because the two measure text differently.
 `mermaid` is a default-on feature. Without it nothing is drawn and every
 diagram renders as its source.
 
+A diagram in a PDF is drawn the same way, with two differences: it keeps
+mermaid's own palette, since a printed page has no colour scheme to follow, and
+`merman` is asked for SVG text labels rather than the `<foreignObject>` HTML
+ones it normally produces, which need a browser to lay out.
+
 ### Mathematics
 
 A `[stem]`, `[latexmath]` or `[asciimath]` block is an equation, converted here
@@ -369,6 +376,48 @@ render untrusted AsciiDoc and serve the result to other people, run it through a
 sanitizer such as [`ammonia`](https://crates.io/crates/ammonia) first. Safe mode
 does not address this — it governs how far a document may reach outside itself,
 not what it may put on the page.
+
+## PDF output
+
+`-o <name>.pdf` typesets the document instead of rendering it as a page. There
+is no `--pdf` flag, because the name already says it and two ways of saying one
+thing is one way too many.
+
+```
+adocers -o guide.pdf guide.adoc
+```
+
+The typesetter is [Typst](https://typst.app), which is written in Rust and
+compiles in beside everything else, so a PDF needs no LaTeX installation, no
+headless browser and nothing fetched. The fonts are the ones Typst embeds, so
+the same document gives the same PDF whatever is installed on the machine. The
+showcase — 14 pages, five diagrams and a figure — takes about 90 ms.
+
+This is a second back end rather than a setting on the first (`src/render/typst/`).
+It walks the same block tree and covers the shape of an ordinary document:
+headings, paragraphs, lists, tables with spans and footers, listings, quotes and
+verses, admonitions, images, footnotes, page breaks and cross references.
+Diagrams are drawn into it as vector graphics, so they are as sharp printed as
+they are on screen; `merman` is asked for SVG text labels rather than the
+`<foreignObject>` HTML ones mermaid normally uses, which a browser lays out and
+a PDF has no way to.
+
+Four things are deliberately left short of the page:
+
+- **Equations are shown as their source.** Typst has a mathematics mode, but its
+  syntax is neither LaTeX's nor AsciiMath's — `\sum_{i=1}^{n}` is `sum_(i=1)^n`
+  there — so an equation cannot simply be handed over. What the author wrote is
+  shown instead, until it can be translated properly.
+- **A table cell written as AsciiDoc comes out empty.** A cell holding whole
+  blocks is more structure than a page of this kind wants.
+- **Passthroughs are dropped.** They are HTML, which a PDF has no use for.
+- **A cross reference to anything but a section becomes plain text.** Typst
+  refuses to lay out a document that links to a label it cannot find, so a
+  reference that would dangle keeps its words and loses its link.
+
+`pdf` is a default-on feature. `cargo build --no-default-features` leaves out
+the PDF back end along with the `typst` crates, and asking such a build
+for a `.pdf` says so rather than writing something wrong.
 
 ## Benchmarks and profiling
 

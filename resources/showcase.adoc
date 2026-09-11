@@ -909,6 +909,42 @@ what the parser measured, so the underline always lands on the right bytes. When
 a warning comes from an included file, a note names the file and line it really
 came from.
 
+== PDF output
+
+Naming the output `.pdf` typesets the document instead of rendering it as a
+page. There is no separate flag: the name already says which is wanted.
+
+[source,console]
+----
+adocers -o showcase.pdf showcase.adoc
+----
+
+The typesetter is https://typst.app[Typst], compiled into this binary, so a PDF
+needs no LaTeX installation, no headless browser and nothing fetched. The fonts
+are the ones Typst carries, so the same document gives the same PDF wherever it
+is run. This page takes about 90 ms.
+
+Almost everything on this page survives the crossing: headings, lists, tables
+with their spans and footers, admonitions, quotes and verses, listings with
+their callouts, images, footnotes and the page breaks below. The diagrams are
+drawn into it as vector graphics rather than pictures of diagrams, so they are
+as sharp printed as they are here.
+
+Four things are deliberately left short:
+
+Equations are shown as the notation they were written in:: Typst has a
+mathematics mode, but its syntax is neither LaTeX's nor AsciiMath's, so an
+equation cannot simply be handed over.
+
+A table cell written as AsciiDoc comes out empty:: A cell holding whole blocks
+is more structure than a printed table wants.
+
+Passthroughs are dropped:: They are HTML, which a PDF has no use for.
+
+A cross reference to anything but a section becomes plain text:: Typst will not
+lay out a document that links to a label it cannot find, so a reference that
+would dangle keeps its words and loses its link.
+
 [appendix]
 == The command line
 
@@ -919,6 +955,7 @@ came from.
 adocers doc.adoc                 # writes doc.html beside it
 adocers -o build/ *.adoc         # writes build/<name>.html
 adocers -o - doc.adoc            # writes to standard output
+adocers -o doc.pdf doc.adoc      # writes a PDF instead
 adocers --watch docs/*.adoc      # re-renders on change
 adocers serve ./docs             # http://127.0.0.1:8080/
 ----
