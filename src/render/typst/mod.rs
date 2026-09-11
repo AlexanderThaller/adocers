@@ -24,6 +24,7 @@
 //! a document that points at a label it cannot find.
 
 mod inline;
+mod math;
 
 use std::{
     fmt::Write as _,
@@ -67,7 +68,40 @@ use crate::render::{
 pub fn pdf(document: &Document<'_>, base: &Path, options: &Options) -> Result<Vec<u8>> {
     let (source, images) = markup(document, base, options);
 
-    compile(&source, &images)
+    let error = match compile(&source, &images) {
+        Ok(bytes) => return Ok(bytes),
+        Err(error) => error,
+    };
+
+    // Converted mathematics is the one part of this that can fail on content
+    // rather than on a mistake here: `mitex` covers a great deal of LaTeX but
+    // not all of it, and a command it renders as a handler this does not define
+    // stops the whole document. A page of equations shown as their source is a
+    // far better answer than no page at all.
+    if !options.math {
+        return Err(error);
+    }
+
+    let plain = Options {
+        math: false,
+        ..options.clone()
+    };
+
+    let (source, images) = markup(document, base, &plain);
+
+    match compile(&source, &images) {
+        Ok(bytes) => {
+            eprintln!(
+                "adocers: an equation could not be typeset, so every equation is shown as its \
+                 source ({error:#})"
+            );
+
+            Ok(bytes)
+        }
+
+        // The mathematics was not the trouble; report what actually went wrong.
+        Err(_) => Err(error),
+    }
 }
 
 /// The Typst markup for a document, and the image files it refers to.
@@ -76,7 +110,7 @@ pub fn markup(
     base: &Path,
     options: &Options,
 ) -> (String, Vec<(String, Vec<u8>)>) {
-    let mut out = Preamble::new(document).to_string();
+    let mut out = Preamble::new(document, options).to_string();
 
     let mut emitter = Emitter {
         out: String::new(),
@@ -85,6 +119,7 @@ pub fn markup(
         labels: std::collections::HashSet::new(),
         toc: Toc::of(document),
         options: options.clone(),
+        stem: attribute(document, "stem"),
     };
 
     // An outline placed above the content goes between the title block and the
@@ -173,12 +208,12 @@ const CALLOUT: &str = "#let adoccallout(n) = if n <= 10 { str.from-unicode(0x277
 /// in the document's catalogue, so the texts are written out once here and each
 /// reference calls for the one it wants. Typst then puts it at the foot of
 /// whichever page the reference landed on and numbers it itself.
-fn footnotes(document: &Document<'_>) -> String {
+fn footnotes(document: &Document<'_>, options: &Options) -> String {
     let texts: Vec<String> = document
         .catalog()
         .footnotes()
         .iter()
-        .map(|footnote| format!("[{}]", inline_markup(&footnote.text)))
+        .map(|footnote| format!("[{}]", prose(&footnote.text, options.math)))
         .collect();
 
     // One item needs the trailing comma that tells an array from a parenthesis,
@@ -351,11 +386,74 @@ fn details(document: &Document<'_>) -> String {
     out.trim_end().trim_end_matches('\\').to_string()
 }
 
+/// Inline content, with any equation in it typeset rather than written out.
+///
+/// The parser hands an inline `stem:[…]` to the page as the delimiters
+/// `MathJax` used to look for — `\(…\)` for LaTeX, `\$…\$` for `AsciiMath`.
+/// Nothing looks for them here either, so a line would otherwise carry
+/// `\(x^2\)` as written.
+///
+/// LaTeX is typeset; `AsciiMath` is shown as its source, without the
+/// delimiters, for the reason [`math`] gives.
+fn prose(html: &str, math: bool) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+
+    while let Some((at, open, close, latex)) = equation(rest) {
+        out.push_str(&inline_markup(&rest[..at]));
+
+        let body = &rest[at + open.len()..];
+
+        // An opening delimiter with no closing one is not an equation.
+        let Some(end) = body.find(close) else {
+            out.push_str(&inline_markup(&rest[at..at + open.len()]));
+            rest = &rest[at + open.len()..];
+
+            continue;
+        };
+
+        let source = inline::unescape(&body[..end]);
+
+        match typeset(&source, math && latex) {
+            Some(converted) => out.push_str(&converted),
+            None => {
+                let _ = write!(out, "#raw({})", string(source.trim()));
+            }
+        }
+
+        rest = &body[end + close.len()..];
+    }
+
+    out.push_str(&inline_markup(rest));
+    out
+}
+
+/// The next delimited equation, and whether it is written in LaTeX.
+fn equation(html: &str) -> Option<(usize, &'static str, &'static str, bool)> {
+    let latex = html.find("\\(").map(|at| (at, "\\(", "\\)", true));
+    let ascii = html.find("\\$").map(|at| (at, "\\$", "\\$", false));
+
+    match (latex, ascii) {
+        (Some(l), Some(a)) if a.0 < l.0 => Some(a),
+        (Some(l), _) => Some(l),
+        (None, found) => found,
+    }
+}
+
+/// One equation as Typst mathematics, if this run converts them and it is a
+/// notation that can be converted.
+fn typeset(source: &str, convert: bool) -> Option<String> {
+    convert
+        .then(|| math::typst(source))
+        .flatten()
+        .map(|converted| format!("${converted}$"))
+}
+
 /// The page setup and title block that every rendered document opens with.
 struct Preamble(String);
 
 impl Preamble {
-    fn new(document: &Document<'_>) -> Self {
+    fn new(document: &Document<'_>, options: &Options) -> Self {
         let mut out = String::new();
 
         let title = document
@@ -368,10 +466,11 @@ impl Preamble {
              text(size: 10.5pt)\n#set par(justify: true, leading: 0.62em)\n#show heading: it => \
              block(above: 1.4em, below: 0.7em, it)\n#show link: it => text(fill: \
              rgb(\"#1565a8\"), it)\n#show raw.where(block: true): it => block(\n\x20 width: 100%, \
-             fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n{CALLOUT}\n{}\n",
+             fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n{CALLOUT}\n{}\n{}\n",
             properties(document, &title),
             FITTED,
-            footnotes(document)
+            footnotes(document, options),
+            math::PRELUDE
         );
 
         if document.doctitle().is_some() {
@@ -427,6 +526,10 @@ struct Emitter {
     /// carries — icons, highlighting, diagrams — mean the same here as they do
     /// on a page; the ones about the page itself mean nothing.
     options: Options,
+
+    /// What `:stem:` was set to, which says which notation a plain `[stem]`
+    /// block is written in.
+    stem: Option<String>,
 }
 
 /// The table of contents a document asked for.
@@ -473,6 +576,11 @@ impl Toc {
 }
 
 impl Emitter {
+    /// Inline content, with its equations typeset.
+    fn prose(&self, html: &str) -> String {
+        prose(html, self.options.math)
+    }
+
     /// Write the outline, once.
     ///
     /// Typst builds it from the headings themselves and makes every entry a
@@ -527,8 +635,8 @@ impl Emitter {
                 // and the two agree on every number.
                 let title = format!(
                     "{}{}",
-                    inline_markup(&crate::render::block::section_prefix(section)),
-                    inline_markup(section.section_title())
+                    self.prose(&crate::render::block::section_prefix(section)),
+                    self.prose(section.section_title())
                 );
 
                 // A discrete heading is styled like one but is not a section,
@@ -546,7 +654,7 @@ impl Emitter {
             }
 
             Block::Simple(simple) => {
-                let text = inline_markup(simple.content().rendered_html());
+                let text = self.prose(simple.content().rendered_html());
 
                 if !text.trim().is_empty() {
                     let _ = writeln!(self.out, "{text}\n");
@@ -615,8 +723,8 @@ impl Emitter {
         let _ = writeln!(
             self.out,
             "#block(above: 1em, below: 0.5em)[#text(weight: \"bold\", size: 9.5pt)[{}{}]]\n",
-            inline_markup(caption),
-            inline_markup(title)
+            self.prose(caption),
+            self.prose(title)
         );
     }
 
@@ -636,19 +744,7 @@ impl Emitter {
             // passthrough, which is HTML and has no meaning here.
             "comment" | "pass" => {}
 
-            // Mathematics is shown as its source rather than typeset. Typst
-            // has a mathematics mode of its own, but its syntax is not LaTeX's
-            // and not AsciiMath's — `\sum_{i=1}^{n}` is `sum_(i=1)^n` there —
-            // so handing an equation over unchanged fails outright. Showing
-            // what the author wrote is the honest answer until it can be
-            // translated properly.
-            "stem" => {
-                let _ = writeln!(
-                    self.out,
-                    "#align(center)[#raw({})]\n",
-                    string(content.trim())
-                );
-            }
+            "stem" => self.equation(raw, content.trim()),
 
             // A listing names its language, which Typst highlights with the
             // syntaxes it carries; a literal block names none and is set plain.
@@ -659,6 +755,47 @@ impl Emitter {
 
                 self.verbatim_as(&content, language.as_deref());
             }
+        }
+    }
+
+    /// A displayed equation, typeset if it can be and shown as written if not.
+    ///
+    /// Only LaTeX is translated; see [`math`] for why `AsciiMath` is not, and
+    /// `--no-math` translates neither.
+    fn equation(&mut self, raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>, source: &str) {
+        if let Some(typeset) = self.mathematics(raw, source) {
+            let _ = writeln!(self.out, "$ {typeset} $\n");
+
+            return;
+        }
+
+        let _ = writeln!(self.out, "#align(center)[#raw({})]\n", string(source));
+    }
+
+    /// One equation as Typst mathematics, if this run converts them and the
+    /// notation is one that can be converted.
+    fn mathematics(
+        &self,
+        raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>,
+        source: &str,
+    ) -> Option<String> {
+        if !self.options.math || !self.is_latex(raw) {
+            return None;
+        }
+
+        math::typst(source)
+    }
+
+    /// Whether an equation is written in LaTeX.
+    ///
+    /// `[latexmath]` says so outright; a plain `[stem]` takes whatever `:stem:`
+    /// was set to, which is `AsciiMath` unless it says otherwise. Read the way
+    /// the page reads it, so one block cannot be two notations.
+    fn is_latex(&self, raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>) -> bool {
+        match raw.declared_style() {
+            Some("latexmath") => true,
+            Some("asciimath") => false,
+            _ => self.stem.as_deref() == Some("latexmath"),
         }
     }
 
@@ -789,7 +926,8 @@ impl Emitter {
         // no child blocks at all, so asking only for the children loses it.
         match admonition.content() {
             Some(content) => {
-                self.out.push_str(&inline_markup(content.rendered_html()));
+                let converted = self.prose(content.rendered_html());
+                self.out.push_str(&converted);
                 self.out.push_str("\n\n");
             }
 
@@ -872,7 +1010,8 @@ impl Emitter {
             }
 
             Some(content) => {
-                self.out.push_str(&inline_markup(content.rendered_html()));
+                let converted = self.prose(content.rendered_html());
+                self.out.push_str(&converted);
                 self.out.push_str("\n\n");
             }
 
@@ -883,7 +1022,7 @@ impl Emitter {
             let _ = writeln!(
                 self.out,
                 "#text(size: 9pt, fill: rgb(\"#656d77\"))[— {}]",
-                inline_markup(attribution)
+                self.prose(attribution)
             );
         }
 
@@ -917,8 +1056,8 @@ impl Emitter {
         let caption = match block.title() {
             Some(title) => format!(
                 ", caption: [{}{}], numbering: none",
-                inline_markup(block.caption().unwrap_or_default()),
-                inline_markup(title)
+                self.prose(block.caption().unwrap_or_default()),
+                self.prose(title)
             ),
 
             None => String::new(),
@@ -996,7 +1135,7 @@ impl Emitter {
                 (
                     ListType::Description,
                     asciidoc_parser::blocks::ListItemMarker::DefinedTerm { term, .. },
-                ) => format!("{}: ", inline_markup(term.rendered_html())),
+                ) => format!("{}: ", self.prose(term.rendered_html())),
 
                 (ListType::Description, _) => ": ".to_string(),
                 _ => String::new(),
@@ -1081,7 +1220,7 @@ impl Emitter {
         for cell in row.cells() {
             let text = match cell.content() {
                 asciidoc_parser::blocks::TableCellContent::Simple(content) => {
-                    inline_markup(content.rendered_html())
+                    self.prose(content.rendered_html())
                 }
 
                 // A cell holding whole blocks is reduced to its text: a table
@@ -1467,6 +1606,36 @@ mod tests {
         // so it keeps its number and loses the link.
         assert!(!out.contains("_footnotedef_"), "{out}");
         assert!(out.contains("Why."), "{out}");
+    }
+
+    #[test]
+    fn typesets_latex_and_leaves_asciimath_as_written() {
+        let out = render("= T\n:stem: latexmath\n\n[stem]\n++++\n\\frac{a}{b}\n++++\n");
+
+        assert!(out.contains("$ frac(a ,b ) $"), "{out}");
+
+        let plain = render("= T\n\n[stem]\n++++\nsqrt(4)\n++++\n");
+
+        assert!(plain.contains("#raw(\"sqrt(4)\")"), "{plain}");
+    }
+
+    #[test]
+    fn typesets_an_equation_in_a_line_of_text() {
+        let out = render("= T\n:stem: latexmath\n\nA line with stem:[x^2] in it.\n");
+
+        assert!(out.contains("$x ^(2 )$"), "{out}");
+    }
+
+    #[test]
+    fn falls_back_to_the_source_when_an_equation_will_not_typeset() {
+        // `\hbar` converts to a symbol this Typst no longer carries, so the
+        // document only lays out once the equations are shown as written.
+        let mut parser = Parser::default();
+        let document = parser.parse("= T\n:stem: latexmath\n\n[stem]\n++++\n\\hbar\\omega\n++++\n");
+
+        let bytes = pdf(&document, Path::new("."), &options()).expect("still makes a PDF");
+
+        assert!(bytes.starts_with(b"%PDF"), "should be a PDF");
     }
 
     #[test]

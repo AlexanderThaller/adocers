@@ -15,10 +15,13 @@ mermaid = ["dep:merman"]
 
 # PDF output, typeset by Typst — which is Rust, so a PDF needs no LaTeX, no
 # headless browser and nothing fetched. Typst's own fonts come with it.
-pdf = ["dep:typst", "dep:typst-as-lib", "dep:typst-pdf"]
+# `mitex` belongs to this back end rather than to `math`: it translates LaTeX
+# to Typst's own mathematics, which only a PDF has any use for.
+pdf = ["dep:mitex", "dep:typst", "dep:typst-as-lib", "dep:typst-pdf"]
 
 # Equations, converted to MathML for the browser to draw. Without it an
-# equation renders as the notation it was written in.
+# equation renders as the notation it was written in — in a PDF too, since this
+# is the switch that says whether equations are converted at all.
 math = ["dep:math-core", "dep:asciimath-rs"]
 
 # Syntax highlighting, and the grammars it parses with.
@@ -84,6 +87,7 @@ tree-sitter-rust = { version = "0.24", optional = true }
 tree-sitter-toml-ng = { version = "0.7", optional = true }
 tree-sitter-typescript = { version = "0.23", optional = true }
 tree-sitter-yaml = { version = "0.7", optional = true }
+mitex = { version = "0.2", optional = true }
 typst = { version = "0.15", optional = true }
 typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"], optional = true }
 typst-pdf = { version = "0.15", optional = true }

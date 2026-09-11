@@ -23,13 +23,14 @@
 //! A diagram bound for a PDF takes neither correction and one of its own: see
 //! [`printable`].
 
+#[cfg(feature = "pdf")]
+use merman::svg::SvgPipeline;
 use merman::{
     OperationControl,
     RenderOutput,
     RenderRequest,
     Renderer,
     SvgRequest,
-    svg::SvgPipeline,
 };
 
 /// The page's own colours, applied to the parts of a diagram that are chrome

@@ -404,7 +404,8 @@ if you write much of it.
 
 `--no-math` leaves an equation as the notation it was written in, which is also
 what happens to one neither converter can read. `math` is a default-on feature;
-without it nothing is converted.
+without it nothing is converted, in a PDF either — see [Equations in a
+PDF](#equations-in-a-pdf) for what happens to one on the way there.
 
 ### Accessibility
 
@@ -470,12 +471,35 @@ they are on screen; `merman` is asked for SVG text labels rather than the
 `<foreignObject>` HTML ones mermaid normally uses, which a browser lays out and
 a PDF has no way to.
 
-Four things are deliberately left short of the page:
+### Equations in a PDF
 
-- **Equations are shown as their source.** Typst has a mathematics mode, but its
-  syntax is neither LaTeX's nor AsciiMath's — `\sum_{i=1}^{n}` is `sum_(i=1)^n`
-  there — so an equation cannot simply be handed over. What the author wrote is
-  shown instead, until it can be translated properly.
+Typst has a mathematics mode, but its syntax is neither LaTeX's nor AsciiMath's
+— `\sum_{i=1}^{n}` is `sum_(i=1)^n` there — so an equation cannot be handed over
+as it stands. `[latexmath]`, and `[stem]` under `:stem: latexmath`, goes through
+[`mitex`](https://crates.io/crates/mitex), which translates LaTeX to Typst in
+Rust: no package to fetch, no WebAssembly to run. Sums, integrals, roots,
+matrices, `cases`, `aligned`, arrays, accents, named operators and `\text` all
+come out typeset, inline as well as displayed.
+
+What `mitex` produces calls a few dozen handlers that its own Typst package
+supplies through a scope; `src/render/typst/math.typ` defines them, transcribed
+from that package. Typst has also renamed a good deal of its mathematics since
+`mitex`'s tables were written, and the names it moved are put back. Measured
+against every command `mitex` knows — 936 of them — 854 typeset and 82 do not.
+
+The 82 are not an error. A document whose equations will not lay out is
+rendered a second time with all of them shown as their source, and says so on
+standard error: a page of equations written in LaTeX is a far better answer than
+no page at all.
+
+**AsciiMath is not converted**, and is shown as its source. It looks close
+enough to Typst to tempt one into passing it through, and it is not: `int_0^1`
+is an integral in AsciiMath and the name Typst already uses for the whole-number
+type. An equation shown as what the author wrote is honest; one quietly typeset
+wrong is not. Prefer LaTeX if you want your maths set.
+
+### What a PDF leaves behind
+
 - **A table cell written as AsciiDoc comes out empty.** A cell holding whole
   blocks is more structure than a page of this kind wants.
 - **Passthroughs are dropped.** They are HTML, which a PDF has no use for.
