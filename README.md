@@ -86,6 +86,10 @@ nothing is built ahead of time and nothing is left behind. Every page carries a
 small script that reloads it when anything under the directory changes, so
 editing a file and glancing at the browser is the whole loop.
 
+Ctrl+C stops the server once the requests in flight have finished. A page
+waiting for a change holds its request open for up to twenty seconds, so a
+second Ctrl+C quits at once without waiting for it.
+
 | Option | Effect |
 | --- | --- |
 | `-b, --bind <ADDR>` | `HOST:PORT`, or a bare port number for `127.0.0.1`. Default `127.0.0.1:8080`. |

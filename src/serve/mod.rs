@@ -167,14 +167,30 @@ async fn listen(site: Arc<Site>, address: &str) -> Result<()> {
 }
 
 /// Resolves once the process is asked to stop.
+///
+/// The first interrupt starts a graceful shutdown: the listener closes and
+/// the requests in flight are allowed to finish. One of those may be a reload
+/// request waiting for the directory to change, which holds on for up to
+/// twenty seconds — long enough that a second press, from someone who wanted
+/// the prompt back, should not be made to wait for it.
 async fn interrupted() {
     // A failure to install the handler leaves the future pending, which simply
     // means the server runs until it is killed.
-    if tokio::signal::ctrl_c().await.is_ok() {
-        eprintln!("adocers: stopping");
-    } else {
+    if tokio::signal::ctrl_c().await.is_err() {
         std::future::pending::<()>().await;
     }
+
+    eprintln!("adocers: stopping; press Ctrl+C again to quit at once");
+
+    // The handler stays installed, so waiting again waits for the next press.
+    // Exiting from here rather than unwinding is the point: nothing that is
+    // still running is worth waiting for.
+    tokio::spawn(async {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            eprintln!("adocers: quitting");
+            std::process::exit(130);
+        }
+    });
 }
 
 /// Answer one request.
