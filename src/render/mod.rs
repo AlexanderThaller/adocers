@@ -126,6 +126,7 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         options,
         out: Buffer::new(),
         numbering: numbering::Numbering::of(document),
+        figures: 0,
         toc_rendered: false,
         #[cfg(feature = "mermaid")]
         drawings: 0,
@@ -174,6 +175,12 @@ struct Renderer<'src> {
     /// What each section shows in front of its title, worked out up front so
     /// the outline and the headings cannot disagree about it.
     numbering: numbering::Numbering,
+
+    /// How many figures have been captioned, so each is numbered in turn.
+    ///
+    /// A picture and a drawn diagram share one sequence, which the parser
+    /// cannot count for us: to it a diagram is a listing.
+    figures: usize,
 
     /// Whether a `toc::[]` macro has already emitted the table of contents.
     ///

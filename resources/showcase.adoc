@@ -580,7 +580,9 @@ no wider, so it is there to be read rather than to be scrolled at, and it
 narrows with the column on a small screen. Images do the same.
 
 Mermaid draws a good deal more than the four kinds below; these are the ones
-this page has a use for.
+this page has a use for. A diagram with a title is captioned and numbered as a
+figure, in one sequence with the pictures further down — `:figure-caption:`
+renames the label for a document that is not written in English.
 
 === Flowcharts
 

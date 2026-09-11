@@ -398,6 +398,13 @@ nothing running to redraw it. Drawing in the browser needed a script listening
 for that and redrawing the diagram each time, because mermaid baked the theme
 into the SVG it produced.
 
+A diagram with a title is captioned and numbered as a figure, in one sequence
+with the document's pictures — `Figure 1` may be a drawing and `Figure 2` a
+photograph. `:figure-caption:` renames the label, so a German document sets
+`:figure-caption: Abbildung` and gets `Abbildung 1.`; `:figure-caption!:` leaves
+the title to stand on its own. The parser cannot count this sequence, since to
+it a diagram is a listing, so both back ends count it themselves and agree.
+
 `--no-mermaid` renders a diagram as the listing block it was written as, which
 is also what happens to a diagram `merman` cannot read — the source of a
 diagram being more use than a gap. `merman` is at `0.8.0-alpha.6` and its

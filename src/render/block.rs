@@ -81,16 +81,47 @@ impl<'src> Renderer<'src> {
     /// Emit a block's `<div class="title">`, including any caption prefix
     /// ("Example 1. ", "Figure 2. ") the parser assigned.
     pub(super) fn block_title(&mut self, block: &'src Block<'src>) {
+        let caption = block.caption().unwrap_or_default().to_string();
+
+        self.titled(block, &caption);
+    }
+
+    /// The same, with a caption worked out here rather than by the parser.
+    ///
+    /// A drawn diagram is a figure and is numbered with the pictures, which the
+    /// parser cannot know: to it the block is a listing.
+    pub(super) fn titled(&mut self, block: &'src Block<'src>, caption: &str) {
         let Some(title) = block.title() else {
             return;
         };
-
-        let caption = block.caption().unwrap_or_default();
 
         // Both halves are already inline-rendered; escaping here would show the
         // reader the markup instead of applying it.
         self.out
             .line(&format!("<div class=\"title\">{caption}{title}</div>"));
+    }
+
+    /// The caption for the next figure, and the number that goes in it.
+    ///
+    /// Only a figure that carries a title is numbered — an untitled picture
+    /// shows no caption and takes no number — and `:figure-caption!:` leaves
+    /// the title to stand on its own. Both are the rules the parser follows for
+    /// a picture, followed here so that a diagram joins the same sequence.
+    pub(super) fn figure_caption(&mut self, block: &'src Block<'src>) -> String {
+        if block.title().is_none() {
+            return String::new();
+        }
+
+        let Some(label) = self
+            .attribute("figure-caption")
+            .filter(|label| !label.is_empty())
+        else {
+            return String::new();
+        };
+
+        self.figures += 1;
+
+        format!("{label} {}. ", self.figures)
     }
 
     /// Open a block wrapper `<div>` with the block's id and class list.
@@ -504,8 +535,11 @@ impl<'src> Renderer<'src> {
         self.out.line(&svg);
         self.out.close("div");
 
-        // A diagram's caption sits below it, as an image's does.
-        self.block_title(block);
+        // A diagram's caption sits below it, as an image's does, and is
+        // numbered in the same sequence: both are figures once drawn.
+        let caption = self.figure_caption(block);
+
+        self.titled(block, &caption);
         self.out.close("div");
 
         true

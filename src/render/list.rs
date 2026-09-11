@@ -372,17 +372,83 @@ mod tests {
         render,
     };
 
-    /// The markup one fragment of AsciiDoc produces.
+    /// The markup one fragment of AsciiDoc produces, with the switches a run
+    /// has by default: marks drawn, diagrams drawn.
     fn fragment(source: &str) -> String {
+        fragment_with(
+            source,
+            &Options {
+                fragment: true,
+                icons: true,
+                mermaid: true,
+                ..Options::default()
+            },
+        )
+    }
+
+    /// The same, for a run that asked for something other than the defaults.
+    fn fragment_with(source: &str, options: &Options) -> String {
         let mut parser = Parser::default();
         let document = parser.parse(source);
 
-        let options = Options {
-            fragment: true,
-            ..Options::default()
-        };
+        render(&document, options).html
+    }
 
-        render(&document, &options).html
+    #[test]
+    fn a_drawn_diagram_is_numbered_with_the_pictures() {
+        let html = fragment(
+            ".A picture\nimage::x.svg[]\n\n.A diagram\n[mermaid]\n----\nflowchart LR\n  A -->              B\n----\n\n.Another picture\nimage::y.svg[]\n",
+        );
+
+        let captions: Vec<&str> = html
+            .lines()
+            .filter(|line| line.starts_with("<div class=\"title\">"))
+            .collect();
+
+        assert_eq!(
+            captions,
+            [
+                "<div class=\"title\">Figure 1. A picture</div>",
+                "<div class=\"title\">Figure 2. A diagram</div>",
+                "<div class=\"title\">Figure 3. Another picture</div>",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_untitled_figure_takes_no_number() {
+        let html = fragment("image::x.svg[]\n\n.Titled\nimage::y.svg[]\n");
+
+        assert!(html.contains("Figure 1. Titled"), "{html}");
+    }
+
+    #[test]
+    fn a_document_that_labels_no_figures_shows_no_numbers() {
+        let html = fragment("= D\n:figure-caption!:\n\n.Titled\nimage::x.svg[]\n");
+
+        assert!(html.contains("<div class=\"title\">Titled</div>"), "{html}");
+        assert!(!html.contains("Figure"), "{html}");
+    }
+
+    #[test]
+    fn a_diagram_left_as_a_listing_takes_no_number() {
+        // `--no-mermaid` renders it as the listing it was written as, and a
+        // listing is not a figure.
+        let html = fragment_with(
+            ".A diagram\n[mermaid]\n----\nflowchart LR\n  A --> B\n----\n\n.A \
+             picture\nimage::x.svg[]\n",
+            &Options {
+                fragment: true,
+                mermaid: false,
+                ..Options::default()
+            },
+        );
+
+        assert!(
+            html.contains("<div class=\"title\">A diagram</div>"),
+            "{html}"
+        );
+        assert!(html.contains("Figure 1. A picture"), "{html}");
     }
 
     #[test]

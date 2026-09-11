@@ -119,8 +119,11 @@ impl<'src> Renderer<'src> {
         self.out.line(&img);
         self.out.close("div");
 
-        // An image's caption sits below the figure, unlike every other block.
-        self.block_title(block);
+        // An image's caption sits below the figure, unlike every other block,
+        // and its number comes from the sequence a diagram shares.
+        let caption = self.figure_caption(block);
+
+        self.titled(block, &caption);
         self.out.close("div");
     }
 

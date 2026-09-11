@@ -121,6 +121,8 @@ pub fn markup(
         toc: Toc::of(document),
         options: options.clone(),
         stem: attribute(document, "stem"),
+        figure: attribute(document, "figure-caption"),
+        figures: 0,
         numbering: crate::render::numbering::Numbering::of(document),
     };
 
@@ -574,6 +576,11 @@ struct Emitter {
     /// block is written in.
     stem: Option<String>,
 
+    /// What a figure's caption is labelled with, and how many have been
+    /// captioned so far.
+    figure: Option<String>,
+    figures: usize,
+
     /// What each section shows in front of its title, so a PDF and a page
     /// number the same document the same way.
     numbering: crate::render::numbering::Numbering,
@@ -755,6 +762,27 @@ impl Emitter {
             // already been applied by the parser.
             _ => {}
         }
+    }
+
+    /// The caption for the next figure, and the number that goes in it.
+    ///
+    /// A picture and a drawn diagram share one sequence, which the parser
+    /// cannot count: to it a diagram is a listing. The rules are the ones it
+    /// follows for a picture — only a titled figure is numbered, and
+    /// `:figure-caption!:` leaves the title to stand on its own — so both
+    /// outputs number the same figures the same way.
+    fn figure_caption(&mut self, titled: bool) -> String {
+        if !titled {
+            return String::new();
+        }
+
+        let Some(label) = self.figure.clone().filter(|label| !label.is_empty()) else {
+            return String::new();
+        };
+
+        self.figures += 1;
+
+        format!("{label} {}. ", self.figures)
     }
 
     /// The `.A title` line a block can carry, with the caption the document
@@ -1103,11 +1131,15 @@ impl Emitter {
     /// A picture, with its caption beneath it and held on the same page.
     fn figure<'src>(&mut self, name: &str, block: &impl IsBlock<'src>) {
         let caption = match block.title() {
-            Some(title) => format!(
-                ", caption: [{}{}], numbering: none",
-                self.prose(block.caption().unwrap_or_default()),
-                self.prose(title)
-            ),
+            Some(title) => {
+                let label = self.figure_caption(block.title().is_some());
+
+                format!(
+                    ", caption: [{}{}], numbering: none",
+                    self.prose(&label),
+                    self.prose(title)
+                )
+            }
 
             None => String::new(),
         };
