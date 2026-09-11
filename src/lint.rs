@@ -80,8 +80,15 @@ fn attributes_set_after_the_header<'src>(
     // attribute that was meant for the header.
     let has_header = document.header().title().is_some();
 
-    document
-        .child_blocks()
+    // With sections in the document, everything before the first one is
+    // wrapped in a preamble, and the entries in question are its first
+    // children rather than the document's.
+    let leading = match document.child_blocks().next() {
+        Some(preamble @ Block::Preamble(_)) => preamble.child_blocks(),
+        _ => document.child_blocks(),
+    };
+
+    leading
         .take_while(|block| matches!(block, Block::DocumentAttribute(_)))
         .filter(move |_| has_header)
         .filter_map(|block| match block {
@@ -240,6 +247,14 @@ mod tests {
             lints[0].message.contains("`:axis:`"),
             "{}",
             lints[0].message
+        );
+    }
+
+    #[test]
+    fn an_entry_is_found_inside_the_preamble_a_section_makes() {
+        assert_eq!(
+            codes("= Title\n\n:axis: spec\n\nBody.\n\n== Section\n\nMore.\n"),
+            vec![("AttributeSetAfterHeader", 3)]
         );
     }
 

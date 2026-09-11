@@ -1,0 +1,18 @@
+// expect: AttributeSetAfterHeader@9 AttributeSetAfterHeader@10
+// The two entries sit after the blank line that ends the header, so they are
+// body attributes: they still set their values, but the details shown under
+// the title never see them. Remove the blank line to make them header
+// attributes. The entry in the section further down is left alone.
+= Attribute after the header
+Author Name
+
+:axis: spec
+:status: draft
+
+The entries above are what `check` complains about.
+
+== Later on
+
+:axis: standards
+
+An entry between blocks is where its author put it, and is not reported.

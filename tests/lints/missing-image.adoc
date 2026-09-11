@@ -1,0 +1,19 @@
+// expect: ImageNotFound@9 ImageNotFound@11 ImageNotFound@18
+// A picture is looked for where the document says it is: beside the document,
+// since `:imagesdir:` is not set. URLs, `data:` URIs and icons are never
+// looked for. Table cells are entered.
+= Missing image
+
+image::present.svg[This one exists]
+
+image::gone.png[This one does not]
+
+Inline: image:present.svg[] is there and image:also-gone.svg[] is not.
+
+image::https://example.com/remote.png[A URL is never looked for]
+
+icon:heart[] is a glyph, not a file.
+
+|===
+a|image::gone-in-a-table.png[]
+|===

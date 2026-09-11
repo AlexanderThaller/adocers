@@ -246,6 +246,14 @@ the same way, with a `Help:` line saying what to do, and count as warnings.
   never looks. URLs, `data:` URIs and icons are left alone, and so is
   everything when `:imagesdir:` is itself a URL.
 
+`tests/lints` holds one example document per check, each opening with a
+comment saying what it demonstrates and what `check` reports for it; the test
+suite holds them to that. They are the quickest way to see a check in action:
+
+```
+adocers check tests/lints/*.adoc
+```
+
 One of the parser's own warnings is also switched on where Asciidoctor keeps
 it off. A reference to an attribute that is not set, `{name}`, is left in the
 text as written, and Asciidoctor's default of `attribute-missing=skip` says

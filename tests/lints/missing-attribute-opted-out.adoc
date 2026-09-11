@@ -1,0 +1,6 @@
+// expect: nothing
+// A document that means the braces literally says so, and is left alone.
+= Missing attribute, opted out
+:attribute-missing: skip
+
+Here {placeholder} is meant literally, and the document says so.

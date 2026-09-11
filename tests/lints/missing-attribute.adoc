@@ -1,0 +1,10 @@
+// expect: SkippingReferenceToMissingAttribute@10
+// Asciidoctor leaves `{version}` in the text and says nothing, because its
+// default is `attribute-missing=skip`. Here the default is `warn`, so the
+// reference is reported; the reader is the wrong person to find it.
+= Missing attribute
+:project: adocers
+
+The {project} attribute is set, so this line is fine.
+
+The {version} attribute is not set, so the braces stay in the text.

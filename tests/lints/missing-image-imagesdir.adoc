@@ -1,0 +1,9 @@
+// expect: ImageNotFound@9
+// With `:imagesdir:` set, a picture is looked for under it and nowhere else:
+// `beside-only.svg` exists beside the document, and that does not count.
+= Missing image with imagesdir
+:imagesdir: pics
+
+image::present.svg[Found under pics/]
+
+image::beside-only.svg[Beside the document, not under pics/]

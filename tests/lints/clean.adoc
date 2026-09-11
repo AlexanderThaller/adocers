@@ -1,0 +1,10 @@
+// expect: nothing
+// Everything in its place: header entries directly under the title, a
+// picture that exists, and no reference to an attribute that is not set.
+= Clean
+:axis: spec
+:status: draft
+
+image::present.svg[]
+
+Nothing to report.
