@@ -120,6 +120,29 @@ A raw response is the file on disk, not the preprocessed document: `include::`
 directives appear as written rather than expanded. It carries no reload script,
 being plain text.
 
+### Reading it as a PDF
+
+`?format=pdf` typesets the document instead of rendering it as a page, so the
+printed form can be checked without writing a file:
+
+```
+http://localhost:8080/guide.adoc              # the page
+http://localhost:8080/guide.adoc?format=pdf   # the same document, typeset
+http://localhost:8080/?format=pdf             # the directory's index document
+```
+
+The PDF is built for the request and sent as `application/pdf`, named after the
+document so that saving it from the browser's viewer does not suggest
+`guide.adoc`. `?format=html` is the default and is accepted so a link can be
+built by appending it. A `format` this server cannot produce is a 400 rather
+than a page, since answering with the page would quietly hand back the wrong
+thing. `?raw` answers first when both are given: it is about the file rather
+than the rendering.
+
+Like a raw response, a PDF carries no reload script — a PDF has nowhere to put
+one — so it is re-fetched rather than reloaded. A build without the `pdf`
+feature answers 501 and says so.
+
 Paths are confined to the served directory: a request cannot climb out with
 `..`, and a symlink pointing outside is not followed out. Diagnostics for each
 rendered document go to the terminal, exactly as they do for `render`, so a

@@ -54,7 +54,10 @@ use crate::{
         ServeArgs,
     },
     diagnostics::Reporter,
-    job,
+    job::{
+        self,
+        Format,
+    },
     render::{
         Options,
         Page,
@@ -79,6 +82,9 @@ const INTERNAL_PREFIX: &str = "/__adocers/";
 
 /// Content type of every page this server generates.
 const HTML: &str = "text/html; charset=utf-8";
+
+/// Content type of a typeset document.
+const PDF: &str = "application/pdf";
 
 /// Serve a directory until the process is interrupted.
 pub fn run(args: &ServeArgs) -> Result<()> {
@@ -207,8 +213,18 @@ async fn handle(State(site): State<Arc<Site>>, request: Request) -> Response {
         return site.internal(endpoint, &query).await;
     }
 
-    // `?raw` asks for the document behind a page rather than the page.
-    let raw = query_flag(&query, "raw");
+    // `?raw` asks for the document behind a page, and `?format=` for one of the
+    // forms it can be rendered into.
+    let Some(wanted) = wanted(&query) else {
+        return site
+            .status_page(
+                StatusCode::BAD_REQUEST,
+                "Bad request",
+                "`format` can be `html` or `pdf`. Use `?raw` for the AsciiDoc itself.",
+            )
+            .send()
+            .await;
+    };
 
     // Resolving a path, reading a directory and parsing a document are all
     // blocking work, and doing them on a runtime thread would stall every other
@@ -216,7 +232,7 @@ async fn handle(State(site): State<Arc<Site>>, request: Request) -> Response {
     let answer = {
         let site = Arc::clone(&site);
 
-        tokio::task::spawn_blocking(move || site.answer(&path, &encoded_path, &query, raw)).await
+        tokio::task::spawn_blocking(move || site.answer(&path, &encoded_path, &query, wanted)).await
     };
 
     match answer {
@@ -259,6 +275,19 @@ struct Site {
     reload: Option<Reload>,
 }
 
+/// Which of a document's forms a request asked for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Wanted {
+    /// The rendered page, which is what a request without a query gets.
+    Page,
+
+    /// The AsciiDoc behind the page, asked for with `?raw`.
+    Source,
+
+    /// The document typeset as a PDF, asked for with `?format=pdf`.
+    Pdf,
+}
+
 /// What to send back, before the body has been opened.
 #[derive(Debug)]
 enum Answer {
@@ -280,6 +309,16 @@ enum Answer {
         location: String,
     },
 
+    /// A typeset document, named so that saving it from the viewer suggests
+    /// something better than the AsciiDoc file's name.
+    Pdf {
+        /// The PDF itself.
+        body: Vec<u8>,
+
+        /// What to call it when it is saved.
+        name: String,
+    },
+
     /// A file to stream straight from disk.
     File {
         /// The file to open.
@@ -294,9 +333,9 @@ impl Site {
     /// Work out what a request should be answered with.
     ///
     /// `encoded_path` and `query` are the request as it arrived, used to build
-    /// a redirect that is still valid after the round trip. `raw` asks for
-    /// a document's source instead of its rendering.
-    fn answer(&self, path: &str, encoded_path: &str, query: &str, raw: bool) -> Answer {
+    /// a redirect that is still valid after the round trip. `wanted` is which
+    /// form of the document was asked for.
+    fn answer(&self, path: &str, encoded_path: &str, query: &str, wanted: Wanted) -> Answer {
         let Some(target) = self.resolve(path).or_else(|| self.document_behind(path)) else {
             return self.not_found(path);
         };
@@ -308,8 +347,8 @@ impl Site {
         if metadata.is_dir() {
             // Without the trailing slash every relative link in the page would
             // resolve against the parent directory instead of this one. The
-            // query has to survive the trip, or `?raw` would be lost exactly
-            // when it was asked for.
+            // query has to survive the trip, or `?raw` and `?format` would be
+            // lost exactly when they were asked for.
             if !path.ends_with('/') {
                 let query = if query.is_empty() {
                     String::new()
@@ -322,10 +361,10 @@ impl Site {
                 };
             }
 
-            return self.directory(&target, path, raw);
+            return self.directory(&target, path, wanted);
         }
 
-        self.file(&target, raw)
+        self.file(&target, wanted)
     }
 
     /// Answer a health check.
@@ -388,15 +427,15 @@ impl Site {
 
     /// Answer a request that named a directory.
     ///
-    /// `raw` reaches the index document, so the source behind a directory's
-    /// page can be read the same way as the source behind any other page. A
-    /// listing has no document behind it, so it ignores the flag.
-    fn directory(&self, target: &Path, path: &str, raw: bool) -> Answer {
+    /// `wanted` reaches the index document, so a directory's page can be asked
+    /// for in the same forms as any other page. A listing has no document
+    /// behind it, so it is always a page.
+    fn directory(&self, target: &Path, path: &str, wanted: Wanted) -> Answer {
         for name in &self.index_files {
             let candidate = target.join(name);
 
             if candidate.is_file() {
-                return self.file(&candidate, raw);
+                return self.file(&candidate, wanted);
             }
         }
 
@@ -426,22 +465,40 @@ impl Site {
 
     /// Answer a request that named a file.
     ///
-    /// Only a document is rendered, so `raw` matters only for one: every other
-    /// file is served as it is either way.
-    fn file(&self, target: &Path, raw: bool) -> Answer {
-        if raw || !mime::is_asciidoc(target) {
+    /// Only a document is rendered, so `wanted` matters only for one: every
+    /// other file is served as it is whatever was asked for.
+    fn file(&self, target: &Path, wanted: Wanted) -> Answer {
+        if wanted == Wanted::Source || !mime::is_asciidoc(target) {
             return Answer::File {
                 path: target.to_path_buf(),
                 content_type: mime::of(target),
             };
         }
 
+        if wanted == Wanted::Pdf && !cfg!(feature = "pdf") {
+            return self.status_page(
+                StatusCode::NOT_IMPLEMENTED,
+                "No typesetter",
+                "This build cannot write PDFs: it was built without the `pdf` feature.",
+            );
+        }
+
+        let format = match wanted {
+            Wanted::Pdf => Format::Pdf,
+            _ => Format::Html,
+        };
+
         let options = Options {
             body_suffix: self.body_suffix(),
             ..self.options.clone()
         };
 
-        match job::render_file(target, &self.common, &options, self.reporter) {
+        match job::render_as(target, format, &self.common, &options, self.reporter) {
+            Ok(outcome) if format == Format::Pdf => Answer::Pdf {
+                body: outcome.bytes,
+                name: pdf_name(target),
+            },
+
             Ok(outcome) => Answer::html(
                 StatusCode::OK,
                 String::from_utf8_lossy(&outcome.bytes).into_owned(),
@@ -564,6 +621,23 @@ impl Answer {
                 Body::empty(),
             ),
 
+            Self::Pdf { body, name } => {
+                let mut response = build(StatusCode::OK, PDF, None, Body::from(body));
+
+                // `inline` so the browser shows it rather than saving it, and a
+                // name so that saving it anyway does not suggest `guide.adoc`
+                // for a PDF.
+                if let Ok(value) =
+                    header::HeaderValue::from_str(&format!("inline; filename=\"{name}\""))
+                {
+                    response
+                        .headers_mut()
+                        .insert(header::CONTENT_DISPOSITION, value);
+                }
+
+                response
+            }
+
             Self::File { path, content_type } => match tokio::fs::File::open(&path).await {
                 // Streaming means a large asset never has to be held in memory
                 // in its entirety, however big the directory being served is.
@@ -617,6 +691,54 @@ fn build(status: StatusCode, content_type: &str, location: Option<&str>, body: B
     builder
         .body(body)
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+}
+
+/// Which form of a document a query asked for, or `None` if it named one this
+/// server does not have.
+///
+/// `?raw` came first and stays as it is, so `format` names only what is
+/// rendered: the page, or the PDF. Answering an unknown value with the page
+/// would quietly hand back the wrong thing to somebody who asked for
+/// `?format=epub` and meant it.
+fn wanted(query: &str) -> Option<Wanted> {
+    if query_flag(query, "raw") {
+        return Some(Wanted::Source);
+    }
+
+    // Lowercased for the same reason `-o GUIDE.PDF` writes a PDF: the case a
+    // name happens to be typed in says nothing about what was meant.
+    let format = query_value(query, "format").map(str::to_lowercase);
+
+    match format.as_deref() {
+        // `html` is accepted, and not only the default, so that a link can be
+        // built by appending `format=html` without knowing that.
+        None | Some("html" | "") => Some(Wanted::Page),
+
+        Some("pdf") => Some(Wanted::Pdf),
+        Some(_) => None,
+    }
+}
+
+/// What a typeset document should be called when it is saved.
+///
+/// The AsciiDoc file's name with a `.pdf` on it, minus anything a browser would
+/// have to read as part of the header rather than as the name.
+fn pdf_name(target: &Path) -> String {
+    let stem = target
+        .file_stem()
+        .map(|stem| stem.to_string_lossy())
+        .unwrap_or_default();
+
+    let stem: String = stem
+        .chars()
+        .filter(|c| !c.is_control() && !matches!(c, '"' | '\\'))
+        .collect();
+
+    if stem.is_empty() {
+        return "document.pdf".to_string();
+    }
+
+    format!("{stem}.pdf")
 }
 
 /// The value of one parameter in a query string.
@@ -690,6 +812,43 @@ mod tests {
                 "`{path}` should name no document"
             );
         }
+    }
+
+    #[test]
+    fn reads_which_form_of_a_document_was_asked_for() {
+        assert_eq!(wanted(""), Some(Wanted::Page));
+        assert_eq!(wanted("format=html"), Some(Wanted::Page));
+        assert_eq!(wanted("format="), Some(Wanted::Page));
+        assert_eq!(wanted("format=pdf"), Some(Wanted::Pdf));
+        assert_eq!(wanted("generation=3&format=pdf"), Some(Wanted::Pdf));
+    }
+
+    #[test]
+    fn keeps_raw_ahead_of_the_format() {
+        // `?raw` is about the file rather than the rendering, so it answers
+        // whatever else was asked for.
+        assert_eq!(wanted("raw"), Some(Wanted::Source));
+        assert_eq!(wanted("format=pdf&raw"), Some(Wanted::Source));
+    }
+
+    #[test]
+    fn refuses_a_format_it_cannot_produce() {
+        // Answering with the page would hand back the wrong thing to somebody
+        // who asked for something else and meant it.
+        assert_eq!(wanted("format=epub"), None);
+
+        // The case a name is typed in says nothing about what was meant.
+        assert_eq!(wanted("format=PDF"), Some(Wanted::Pdf));
+    }
+
+    #[test]
+    fn names_a_typeset_document_after_its_source() {
+        assert_eq!(pdf_name(Path::new("/srv/guide.adoc")), "guide.pdf");
+        assert_eq!(pdf_name(Path::new("guide.asciidoc")), "guide.pdf");
+
+        // A quote would end the filename early and leave the rest of the name
+        // to be read as header syntax.
+        assert_eq!(pdf_name(Path::new(r#"od"d.adoc"#)), "odd.pdf");
     }
 
     #[test]

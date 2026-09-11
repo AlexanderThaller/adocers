@@ -997,10 +997,14 @@ it — `INDEX.adoc`, then `README.adoc` — and otherwise with a browsable listi
 Adding `raw` to the query serves a document's source instead of its rendering,
 so a page and the AsciiDoc behind it are one query parameter apart:
 
+`format` asks for one of the forms it can be rendered into, so the typeset
+document is one parameter away as well:
+
 [source,console]
 ----
-http://localhost:8080/showcase.adoc        # this page
-http://localhost:8080/showcase.adoc?raw    # the AsciiDoc behind it
+http://localhost:8080/showcase.adoc             # this page
+http://localhost:8080/showcase.adoc?raw         # the AsciiDoc behind it
+http://localhost:8080/showcase.adoc?format=pdf  # the same document, typeset
 ----
 
 Every page carries a script that reloads it when anything under the served
