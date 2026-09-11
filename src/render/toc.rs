@@ -21,8 +21,8 @@ use asciidoc_parser::{
 
 use crate::render::{
     Renderer,
-    block,
     html::escape_attr,
+    numbering::Numbering,
 };
 
 /// One line of the outline, plus the lines nested beneath it.
@@ -92,7 +92,7 @@ impl Renderer<'_> {
         let depth = overrides
             .levels
             .unwrap_or_else(|| self.document.toc_levels());
-        let entries = entries(self.document.child_blocks(), 1, depth);
+        let entries = entries(self.document.child_blocks(), 1, depth, &self.numbering);
 
         if entries.is_empty() {
             return false;
@@ -189,6 +189,7 @@ fn entries<'src>(
     blocks: impl Iterator<Item = &'src Block<'src>>,
     level: usize,
     depth: usize,
+    numbering: &Numbering,
 ) -> Vec<Entry> {
     if level > depth {
         return Vec::new();
@@ -205,12 +206,8 @@ fn entries<'src>(
         {
             outline.push(Entry {
                 id: section.id().map(str::to_string),
-                title: format!(
-                    "{}{}",
-                    block::section_prefix(section),
-                    section.section_title()
-                ),
-                children: entries(section.child_blocks(), level + 1, depth),
+                title: format!("{}{}", numbering.prefix(section), section.section_title()),
+                children: entries(section.child_blocks(), level + 1, depth, numbering),
             });
         }
     }

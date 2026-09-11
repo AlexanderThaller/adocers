@@ -146,13 +146,27 @@ impl<'src> Renderer<'src> {
 
     /// The default `<dl>` rendering of a description list.
     fn definition_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        self.open_wrapper(block, "dlist");
+        // A style this back end has no shape of its own for — `[glossary]`,
+        // and whatever else an author names — becomes a class on the wrapper,
+        // ahead of the roles, for a stylesheet to find. Asciidoctor drops the
+        // term's own class in that case, so a styled list's terms are the
+        // style's to set rather than the default's.
+        let style = block.declared_style().unwrap_or_default();
+        let classes = block::wrapper_classes(block, &["dlist", style]);
+        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+        self.out.open("div", block.id(), &classes);
         self.block_title(block);
         self.out.line("<dl>");
 
+        let term = if style.is_empty() {
+            " class=\"hdlist1\""
+        } else {
+            ""
+        };
+
         for item in list_items(list) {
-            self.out
-                .line(&format!("<dt class=\"hdlist1\">{}</dt>", term_of(item)));
+            self.out.line(&format!("<dt{term}>{}</dt>", term_of(item)));
 
             // A term with nothing after it is a legitimate entry — a glossary
             // stub, or a term whose description follows on a later line — and
@@ -346,5 +360,75 @@ fn html_list_type(style: &str) -> Option<&'static str> {
         "lowerroman" => Some("i"),
         "upperroman" => Some("I"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use asciidoc_parser::Parser;
+
+    use crate::render::{
+        Options,
+        render,
+    };
+
+    /// The markup one fragment of AsciiDoc produces.
+    fn fragment(source: &str) -> String {
+        let mut parser = Parser::default();
+        let document = parser.parse(source);
+
+        let options = Options {
+            fragment: true,
+            ..Options::default()
+        };
+
+        render(&document, &options).html
+    }
+
+    #[test]
+    fn a_glossary_list_carries_its_style_as_a_class() {
+        let html = fragment("[glossary]\nmud:: wet, cold dirt\n");
+
+        assert!(html.contains("<div class=\"dlist glossary\">"), "{html}");
+    }
+
+    #[test]
+    fn a_styled_list_leaves_its_terms_to_the_style() {
+        // Asciidoctor writes the term's own class only on an unstyled list, so
+        // a `[glossary]` term is the stylesheet's to set.
+        let styled = fragment("[glossary]\nmud:: wet, cold dirt\n");
+        let plain = fragment("mud:: wet, cold dirt\n");
+
+        assert!(styled.contains("<dt>mud</dt>"), "{styled}");
+        assert!(plain.contains("<dt class=\"hdlist1\">mud</dt>"), "{plain}");
+    }
+
+    #[test]
+    fn a_style_comes_before_the_roles() {
+        let html = fragment("[glossary.red#gid]\nmud:: wet, cold dirt\n");
+
+        assert!(
+            html.contains("<div id=\"gid\" class=\"dlist glossary red\">"),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn the_structural_styles_keep_their_own_shape() {
+        // `horizontal` and `qanda` are shapes rather than names, and are not
+        // turned into classes on a `dlist`.
+        assert!(fragment("[horizontal]\na:: one\n").contains("<div class=\"hdlist\">"));
+        assert!(fragment("[qanda]\na:: one\n").contains("<div class=\"qlist qanda\">"));
+    }
+
+    #[test]
+    fn a_glossary_section_is_a_section_like_any_other() {
+        let html = fragment("[glossary]\n== Glossary\n\n[glossary]\nmud:: wet, cold dirt\n");
+
+        assert!(
+            html.contains("<h2 id=\"_glossary\">Glossary</h2>"),
+            "{html}"
+        );
+        assert!(html.contains("class=\"dlist glossary\""), "{html}");
     }
 }

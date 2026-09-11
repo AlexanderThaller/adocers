@@ -122,6 +122,7 @@ pub fn markup(
         toc: Toc::of(document),
         options: options.clone(),
         stem: attribute(document, "stem"),
+        numbering: crate::render::numbering::Numbering::of(document),
     };
 
     // An outline placed above the content goes between the title block and the
@@ -552,6 +553,10 @@ struct Emitter {
     /// What `:stem:` was set to, which says which notation a plain `[stem]`
     /// block is written in.
     stem: Option<String>,
+
+    /// What each section shows in front of its title, so a PDF and a page
+    /// number the same document the same way.
+    numbering: crate::render::numbering::Numbering,
 }
 
 /// The table of contents a document asked for.
@@ -657,7 +662,7 @@ impl Emitter {
                 // and the two agree on every number.
                 let title = format!(
                     "{}{}",
-                    self.prose(&crate::render::block::section_prefix(section)),
+                    self.prose(&self.numbering.prefix(section)),
                     self.prose(section.section_title())
                 );
 

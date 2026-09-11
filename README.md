@@ -248,6 +248,34 @@ light/dark preference.
 this tool's own back end (`src/render/`). `render` and `serve` go through the
 same pipeline, so a document looks the same either way.
 
+### Special sections
+
+The section styles AsciiDoc reserves for front and back matter — `abstract`,
+`colophon`, `dedication`, `acknowledgments`, `preface`, `partintro`,
+`appendix`, `glossary`, `bibliography` and `index` — all render, and all stand
+outside the numbered sequence:
+
+```
+[glossary]
+== Glossary
+
+[glossary]
+mud:: wet, cold dirt
+rain:: water falling from the sky
+```
+
+A special section carries no number, nothing beneath it carries one, and it does
+not advance the count — the section after a glossary follows the section before
+it. An appendix is the exception: it is lettered, and its own sections are
+numbered from the letter, so `A.1.` follows `Appendix A:`. An `abstract` is a
+chapter in a book and is numbered as one; in an article it is not. A book's
+chapters run on across its parts rather than restarting in each.
+
+The `glossary` style is set twice for a glossary — once on the section and again
+on the description list inside it, which is what marks the entries as glossary
+entries. Any style a description list carries that is not a shape of its own
+becomes a class on it, which is how a stylesheet finds them.
+
 ### Syntax highlighting
 
 A source block is highlighted with [tree-sitter](https://tree-sitter.github.io)

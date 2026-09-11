@@ -287,6 +287,12 @@ What is AsciiDoc?:: A plain-text writing format for structured documents.
 Why not Markdown?:: Because tables, admonitions, includes and cross references
 are part of the language rather than of each tool's dialect.
 
+Any other style is a name rather than a shape: it becomes a class on the list
+for a stylesheet to find, and the terms are left for that style to set. That is
+how a glossary is written — `[glossary]` on the section, and again on the list
+inside it, which is what marks the entries as glossary entries rather than as an
+ordinary pair of columns. The appendix below is one.
+
 == Blocks
 
 === Listings and source
@@ -1020,3 +1026,14 @@ directory changes. The page holds the value of a counter and asks the server for
 the current one; the server does not answer until the two differ. So a change
 reaches the browser as soon as the file system reports it, with no polling in
 between.
+
+[glossary]
+== Glossary
+
+[glossary]
+block:: A paragraph, a list, a table, a diagram — anything with a shape of its
+own. AsciiDoc is made of them.
+fragment:: A rendering of the body alone, with no page around it, for embedding
+in one somebody else wrote.
+oracle:: Asciidoctor, against whose output this renderer's is checked. When the
+two disagree, it is right unless there is a reason in writing.

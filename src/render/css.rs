@@ -250,7 +250,9 @@ ul.none, ul.no-bullet { list-style: none; }
 ul.unstyled { list-style: none; padding-left: 0; }
 ul.inline { list-style: none; padding-left: 0; display: flex; flex-wrap: wrap; gap: 0 1rem; }
 ul.inline > li > p { margin: 0; }
-dt.hdlist1 { font-weight: 600; margin-top: 0.75rem; }
+/* A styled description list — `[glossary]`, say — carries no class on its
+   terms, so the term is styled by where it sits rather than by what it is. */
+.dlist dt { font-weight: 600; margin-top: 0.75rem; }
 dd { margin-left: 1.5rem; }
 .hdlist table { border-collapse: collapse; }
 .hdlist td { padding: 0.25rem 1rem 0.25rem 0; vertical-align: top; }

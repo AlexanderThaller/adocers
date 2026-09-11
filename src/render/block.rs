@@ -137,6 +137,29 @@ impl<'src> Renderer<'src> {
                         self.out.close("div");
                     }
 
+                    // A part's introduction, which Asciidoctor makes an open
+                    // block of. The paragraph keeps its own wrapper inside,
+                    // unlike the three styles below, because the delimited form
+                    // holds whole blocks and this is one of them.
+                    //
+                    // Asciidoctor drops the content when this is not inside a
+                    // book part. It is rendered here wherever it is written:
+                    // throwing away what an author wrote because of where they
+                    // put it is the worse of the two answers.
+                    Some("partintro") => {
+                        let classes = wrapper_classes(block, &["openblock", "partintro"]);
+                        let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
+
+                        self.out.open("div", block.id(), &classes);
+                        self.block_title(block);
+                        self.out.open("div", None, &["content"]);
+                        self.out.open("div", None, &["paragraph"]);
+                        self.out.line(&format!("<p>{content}</p>"));
+                        self.out.close("div");
+                        self.out.close("div");
+                        self.out.close("div");
+                    }
+
                     Some("abstract") => {
                         let classes = wrapper_classes(block, &["quoteblock", "abstract"]);
                         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
@@ -509,7 +532,11 @@ impl<'src> Renderer<'src> {
         };
 
         let heading = format!("h{}", (level + 1).min(6));
-        let title = format!("{}{}", section_prefix(section), section.section_title());
+        let title = format!(
+            "{}{}",
+            self.numbering.prefix(section),
+            section.section_title()
+        );
 
         if section.section_type() == SectionType::Discrete {
             // A discrete heading is a heading and nothing else: it owns no body
@@ -820,24 +847,6 @@ pub(super) fn wrapper_classes<'src>(block: &'src Block<'src>, shape: &[&str]) ->
     // called for, which is the order Asciidoctor writes them in.
     classes.extend(block.roles().into_iter().map(str::to_string));
     classes
-}
-
-/// The numbering that precedes a section title, if the document numbers
-/// sections.
-///
-/// The table of contents shows the same prefix as the heading does, so both
-/// come from here.
-pub(super) fn section_prefix<'src>(section: &'src SectionBlock<'src>) -> String {
-    // An appendix carries a full caption ("Appendix A: "); an ordinary numbered
-    // section carries only its number.
-    if let Some(caption) = section.caption() {
-        return caption.to_string();
-    }
-
-    match section.section_number() {
-        Some(number) => format!("{number}. "),
-        None => String::new(),
-    }
 }
 
 /// Turn escaped page text back into the source it was written as.
