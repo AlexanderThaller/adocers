@@ -73,7 +73,10 @@ body {
   line-height: 1.6;
 }
 
-#header, #content, #footnotes, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
+/* The three landmarks the page is made of. `#footnotes` is not among them: it
+   sits inside `#content` so that it belongs to a landmark, and constraining it
+   again there would indent it and narrow it a second time. */
+#header, #content, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
 #header { padding-top: 2.5rem; }
 #footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
 
@@ -315,11 +318,9 @@ table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; 
   body.toc2.toc-right #toc { right: 0; border-left: 1px solid var(--rule); }
   body.toc2.toc-left #header,
   body.toc2.toc-left #content,
-  body.toc2.toc-left #footnotes,
   body.toc2.toc-left #footer { margin-left: calc(16rem + 2rem); }
   body.toc2.toc-right #header,
   body.toc2.toc-right #content,
-  body.toc2.toc-right #footnotes,
   body.toc2.toc-right #footer { margin-right: calc(16rem + 2rem); }
 }
 "#;
