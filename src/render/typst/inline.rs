@@ -288,15 +288,28 @@ fn entity(name: &str) -> Option<String> {
 }
 
 /// Escape the characters Typst reads as markup.
+///
+/// That includes the ones that are only markup in company — `...` is an
+/// ellipsis, `--` a dash, `//` a comment — because a header's values arrive as
+/// written, and a commit range or a path wants its dots and slashes kept. Dots
+/// and dashes are escaped only where the company is present, so ordinary prose
+/// keeps its full stops as they were; a slash always is, because the `*` that
+/// would make it a comment may be a mark this emitted rather than text.
 fn escape(html: &str) -> String {
-    let text = unescape(html);
+    let text: Vec<char> = unescape(html).chars().collect();
     let mut out = String::with_capacity(text.len());
 
-    for c in text.chars() {
-        if matches!(
-            c,
-            '*' | '_' | '`' | '$' | '#' | '<' | '>' | '@' | '\\' | '[' | ']'
-        ) {
+    for (at, &c) in text.iter().enumerate() {
+        let next = |n: usize| text.get(at + n).copied();
+
+        let markup = match c {
+            '*' | '_' | '`' | '$' | '#' | '<' | '>' | '@' | '\\' | '[' | ']' | '~' | '/' => true,
+            '.' => next(1) == Some('.') && next(2) == Some('.'),
+            '-' => matches!(next(1), Some('-' | '?')),
+            _ => false,
+        };
+
+        if markup {
             out.push('\\');
         }
 
@@ -357,6 +370,18 @@ mod tests {
     fn escapes_what_typst_would_read_as_markup() {
         assert_eq!(typst("2 * 3"), "2 \\* 3");
         assert_eq!(typst("a_b"), "a\\_b");
+    }
+
+    #[test]
+    fn keeps_a_shorthand_from_forming() {
+        assert_eq!(typst("5b8a949...HEAD"), "5b8a949\\...HEAD");
+        assert_eq!(typst("0001..0009"), "0001..0009");
+        assert_eq!(typst("a--b c---d"), "a\\--b c\\-\\--d");
+        assert_eq!(typst("a-b"), "a-b");
+        assert_eq!(typst("a~b"), "a\\~b");
+        assert_eq!(typst("a // b"), "a \\/\\/ b");
+        assert_eq!(typst("g/<strong>h</strong>/i"), "g\\/*h*\\/i");
+        assert_eq!(typst("The end."), "The end.");
     }
 
     #[test]

@@ -549,11 +549,26 @@ impl Renderer<'_> {
 /// out rather than shown by accident.
 const METADATA: &[&str] = &[
     "status",
+    "date",
     "keywords",
     "category",
     "edition",
     "organization",
     "copyright",
+    // What a review says about itself — the range it looked at, what it read
+    // the changes against, how much it found — and what one of its findings
+    // says: which axis, how bad, of what kind, where, and on whose authority.
+    "fixed-point",
+    "head",
+    "diff",
+    "spec",
+    "standards",
+    "findings",
+    "axis",
+    "severity",
+    "kind",
+    "where",
+    "source",
 ];
 
 /// Antora's namespace for page metadata. An attribute in it is shown with the
@@ -587,11 +602,11 @@ fn label_for(name: &str) -> String {
 
 /// The markup for an attribute's value.
 ///
-/// A list of tags or keywords is a set of separate things that happens to be
-/// written with commas, so each is shown as its own mark rather than run
-/// together into a sentence.
+/// A list of tags, keywords or standards is a set of separate things that
+/// happens to be written with commas, so each is shown as its own mark rather
+/// than run together into a sentence.
 fn value_for(name: &str, value: &str) -> String {
-    if !matches!(name, "tags" | "keywords") {
+    if !is_list(name) {
         return escape_text(value);
     }
 
@@ -602,6 +617,11 @@ fn value_for(name: &str, value: &str) -> String {
         .map(|tag| format!("<span class=\"tag\">{}</span>", escape_text(tag)))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Whether an attribute's value is a comma-separated list of separate things.
+fn is_list(name: &str) -> bool {
+    matches!(name, "tags" | "keywords" | "standards")
 }
 
 /// Whether a TOC placement puts the outline above the document's content.
@@ -777,6 +797,35 @@ mod tests {
         assert_eq!(displayed_as("keywords"), Some("keywords"));
         assert_eq!(displayed_as("page-tags"), Some("tags"));
         assert_eq!(displayed_as("page-last-reviewed"), Some("last-reviewed"));
+    }
+
+    #[test]
+    fn what_a_review_and_its_findings_say_about_themselves_is() {
+        for name in [
+            "date",
+            "fixed-point",
+            "head",
+            "diff",
+            "spec",
+            "standards",
+            "findings",
+            "axis",
+            "severity",
+            "kind",
+            "where",
+            "source",
+        ] {
+            assert_eq!(displayed_as(name), Some(name), "`{name}` should be shown");
+        }
+    }
+
+    #[test]
+    fn a_list_of_standards_becomes_separate_marks() {
+        let markup = value_for("standards", "AGENTS.md, docs/adr/0001..0009");
+
+        assert_eq!(markup.matches("class=\"tag\"").count(), 2);
+        assert!(markup.contains(">AGENTS.md<"));
+        assert!(markup.contains(">docs/adr/0001..0009<"));
     }
 
     #[test]
