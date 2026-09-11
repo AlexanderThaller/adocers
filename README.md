@@ -49,7 +49,6 @@ adocers -o - doc.adoc       # writes to standard output
 | `-a, --attribute <NAME[=VALUE]>` | Set a document attribute. `NAME`, `NAME=VALUE`, `NAME!` and `!NAME` all work, and the document cannot override them. Repeatable. |
 | `--no-icons` | Mark admonitions with their label instead of an icon. |
 | `--no-highlight` | Leave source blocks unhighlighted. |
-| `--mermaid-url <URL>` | Load mermaid from this URL instead of the built-in copy. Must be a UMD build. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
 | `--mathjax-url <URL>` | Load MathJax from this URL instead of the built-in copy. Must be a MathJax 3 build with `input/asciimath.js` beside it. |
 | `--no-math` | Show equations as the notation they were written in. |
@@ -303,84 +302,37 @@ emits when `:icons:` is not set.
 
 ### Mermaid diagrams
 
-A block written as `[mermaid]` or `[source,mermaid]` is rendered as a diagram:
+A block written as `[mermaid]` or `[source,mermaid]` is drawn as a diagram.
+Both spellings are recognized, because a document that has to render here *and*
+on GitHub usually picks between them with an attribute.
 
-```
-[mermaid]
-----
-flowchart LR
-    A --> B
-----
-```
+The drawing is done here, while the page is rendered, by
+[`merman`](https://crates.io/crates/merman) — a mermaid parser and layout
+engine in Rust. A page therefore carries its diagrams as `<svg>` and fetches
+nothing to show them.
 
-Both spellings are recognized, because a document that has to render on GitHub
-*and* through Antora usually picks between them with an attribute:
+That is worth more than it sounds. The obvious alternative is to send the
+reader mermaid itself and let the browser draw, which is what this tool used to
+do: 5.6 MB of JavaScript, on every page with a diagram, that has to arrive and
+run before anything appears. Measured on the showcase, which has five diagrams,
+replacing that with drawing here took the page from 2,146 KiB transferred to
+671 KiB, total blocking time from 1,470 ms to 300 ms, the speed index from
+3.6 s to 1.4 s, and a mobile Lighthouse score from 48 to 79.
 
-```
-ifdef::env-github[]
-:MERMAID: source, mermaid
-endif::[]
-ifndef::env-github[]
-:MERMAID: mermaid
-endif::[]
+Diagrams take the reader's colour scheme. Mermaid's own palette is for a light
+page, so a second stylesheet is put on each diagram that gives the page's
+colours to the *chrome* — boxes, lines, labels, backgrounds. The *data* colours
+are left alone: the slices of a pie and the branches of a git graph are telling
+the reader something, and are not the page's to recolour.
 
-[{MERMAID}]
-----
-flowchart LR
-    A --> B
-----
-```
+`--no-mermaid` renders a diagram as the listing block it was written as, which
+is also what happens to a diagram `merman` cannot read — the source of a
+diagram being more use than a gap. `merman` is at `0.8.0-alpha.6` and its
+layout is close to mermaid's rather than identical: labels wrap at slightly
+different widths, because the two measure text differently.
 
-The diagram is drawn in the browser, not at build time. Rendering it here would
-mean shelling out to a headless browser the way `asciidoctor-diagram` does, and
-that puts a build dependency in the way of what is otherwise a self-contained
-binary. It also degrades honestly: a reader with no scripts sees the source of
-the diagram rather than a gap.
-
-Mermaid itself is vendored — `vendor/mermaid/`, compiled into the binary — so a
-rendered page reaches no further than the machine that rendered it. It is
-delivered three ways, depending on where the page is going:
-
-| Output | Where the page gets mermaid |
-| --- | --- |
-| `serve` | The server's own `/__adocers/vendored/…`, cached indefinitely since the name carries the version. |
-| A file | `adocers-assets/mermaid-<version>.min.js`, written beside the page. Documents sharing a directory share one copy. |
-| Standard output | The page carries the module itself; there is nowhere to put a file beside it. |
-
-Only a page that actually has a diagram gets any of this. `--mermaid-url` loads
-from somewhere else instead — it must be a UMD build, one that defines
-`window.mermaid` — and `--no-mermaid` leaves diagrams as the listing blocks they
-were written as. A `--fragment` keeps the diagram markup but never the script:
-the page it is embedded in owns what it loads.
-
-Diagrams follow the reader's colour scheme, and are redrawn if it changes, since
-mermaid bakes the theme into the SVG it produces. A diagram is drawn to the
-width of the column and no wider, so it is there to be read rather than to be
-scrolled at, and it narrows with the column on a small screen.
-
-### Drawing diagrams here instead
-
-The `mermaid-svg` feature, off by default, draws diagrams with
-[`merman`](https://crates.io/crates/merman) while the page is being built. A
-page then carries its diagrams as `<svg>` and needs no drawing module at all.
-A diagram `merman` cannot read falls back to the browser, so nothing is lost
-by turning it on.
-
-Measured on the showcase, which has five diagrams, against the same page with
-the module loaded in the browser:
-
-| | module in the browser | drawn here |
-| --- | --- | --- |
-| Transferred | 2,146 KiB | 670 KiB |
-| Total blocking time | 1,470 ms | 330 ms |
-| Speed index | 3.6 s | 1.4 s |
-| Lighthouse performance | 48 | 78 |
-
-It is off by default for three reasons. `merman` is at `0.8.0-alpha.6`. Its
-layout is close to mermaid's but not identical — labels wrap at slightly
-different widths, because the two measure text differently. And it does not
-shrink the binary yet: the vendored mermaid module is still compiled in beside
-it, so the feature adds rather than replaces.
+`mermaid` is a default-on feature. Without it nothing is drawn and every
+diagram renders as its source.
 
 ### Mathematics
 
@@ -395,7 +347,7 @@ which elements are equations and which notation each is in.
 
 | Output | Where the page gets MathJax |
 | --- | --- |
-| `serve` | The server's own `/__adocers/vendored/…`, as for mermaid. |
+| `serve` | The server's own `/__adocers/vendored/…`, cached indefinitely since the name carries the version. |
 | A file | `adocers-assets/mathjax-<version>-tex-mml-svg.js`, with `input/asciimath.js` beside it. |
 | Standard output | The page carries the module itself — and handles LaTeX only, since AsciiMath's processor is a second file MathJax insists on fetching and an inlined page has no URL to fetch it from. |
 

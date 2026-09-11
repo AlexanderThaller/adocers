@@ -555,10 +555,10 @@ flowchart LR
 ----
 ------
 
-The diagram is drawn in the browser rather than at build time, so no headless
-browser has to be installed alongside this one. It follows your colour scheme
-and is redrawn if you change it. A diagram is drawn to the width of the column
-and no wider, so it is there to be read rather than to be scrolled at, and it
+The diagram is drawn here, while the page is rendered, so the page carries it
+as an `<svg>` and fetches nothing to show it — no drawing module, no script, no
+wait. It takes your colour scheme, and is drawn to the width of the column and
+no wider, so it is there to be read rather than to be scrolled at, and it
 narrows with the column on a small screen. Images do the same.
 
 Mermaid draws a good deal more than the four kinds below; these are the ones

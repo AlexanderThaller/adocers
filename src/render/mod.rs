@@ -36,7 +36,6 @@
 mod block;
 mod callout;
 mod css;
-pub mod diagram;
 mod html;
 
 #[cfg_attr(not(feature = "highlight"), path = "highlight_off.rs")]
@@ -45,7 +44,7 @@ mod icons;
 mod list;
 pub mod math;
 mod media;
-#[cfg(feature = "mermaid-svg")]
+#[cfg(feature = "mermaid")]
 mod mermaid;
 mod table;
 mod toc;
@@ -67,6 +66,10 @@ pub use crate::render::html::{
 
 /// How the rendered body should be wrapped.
 #[derive(Clone, Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these mirror command line flags, and one field per flag is what reads clearly"
+)]
 pub struct Options {
     /// Emit only the body content, with no surrounding HTML page.
     pub fragment: bool,
@@ -91,12 +94,9 @@ pub struct Options {
     /// be highlighted in the browser instead.
     pub highlight: bool,
 
-    /// Where the page gets the drawing module, or `None` to render a diagram
-    /// as the listing block it was written as.
-    ///
-    /// A fragment still carries its diagrams' markup but never the script: the
-    /// page it is embedded in owns what it loads.
-    pub mermaid: Option<diagram::Source>,
+    /// Whether a mermaid block is drawn as a diagram, or left as the listing
+    /// block it was written as.
+    pub mermaid: bool,
 
     /// Where the page gets the typesetting module, or `None` to leave an
     /// equation as the notation it was written in.
@@ -111,13 +111,6 @@ pub struct Options {
 pub struct Rendered {
     /// The markup.
     pub html: String,
-
-    /// Whether the document turned out to hold a diagram.
-    ///
-    /// The caller needs this to know whether the drawing module has to be
-    /// reachable from the page — whether to write it beside the page, in the
-    /// case of a file render — and it is not known until the body is rendered.
-    pub diagrams: bool,
 
     /// Whether the document turned out to hold an equation, for the same
     /// reason and with the same consequences as [`diagrams`](Self::diagrams).
@@ -136,27 +129,21 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         options,
         out: Buffer::new(),
         toc_rendered: false,
-        diagrams: false,
         equations: false,
-        #[cfg(feature = "mermaid-svg")]
+        #[cfg(feature = "mermaid")]
         drawings: 0,
     };
 
     let body = renderer.body();
-    let diagrams = renderer.diagrams;
     let equations = renderer.equations;
 
     let html = if options.fragment {
         body
     } else {
-        document_page(document, options, &body, diagrams, equations)
+        document_page(document, options, &body, equations)
     };
 
-    Rendered {
-        html,
-        diagrams,
-        equations,
-    }
+    Rendered { html, equations }
 }
 
 /// Walks the block tree, appending markup as it goes.
@@ -176,19 +163,13 @@ struct Renderer<'src> {
     /// ignored rather than duplicating the whole outline.
     toc_rendered: bool,
 
-    /// Whether the document turned out to contain a diagram.
-    ///
-    /// Only a page that has one loads the drawing module, so this is not known
-    /// until the body has been rendered.
-    diagrams: bool,
-
     /// Whether the document turned out to contain an equation, for the same
     /// reason: only a page that has one loads the typesetting module.
     equations: bool,
 
     /// How many diagrams have been drawn, so each can be given a name of its
     /// own. Two elements on a page may not share an id.
-    #[cfg(feature = "mermaid-svg")]
+    #[cfg(feature = "mermaid")]
     drawings: usize,
 }
 
@@ -680,7 +661,6 @@ fn document_page(
     document: &Document<'_>,
     options: &Options,
     body: &str,
-    diagrams: bool,
     equations: bool,
 ) -> String {
     let lang = match document.attribute_value("lang") {
@@ -699,13 +679,9 @@ fn document_page(
         .doctitle_sanitized()
         .unwrap_or_else(|| "Untitled".to_string());
 
-    // Each module is delivered only to a page that has something for it to do.
+    // The typesetter is delivered only to a page that has something for it to
+    // do. Diagrams need nothing delivered: they are drawn here.
     let mut body_suffix = String::new();
-
-    if let Some(source) = options.mermaid.as_ref().filter(|_| diagrams) {
-        body_suffix.push_str(&diagram::script(source));
-        body_suffix.push('\n');
-    }
 
     if let Some(source) = options.math.as_ref().filter(|_| equations) {
         body_suffix.push_str(&math::script(source));

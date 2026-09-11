@@ -6,13 +6,12 @@ description = "Render AsciiDoc documents to HTML, with source-anchored diagnosti
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["serve", "highlight", "math"]
+default = ["serve", "highlight", "math", "mermaid"]
 serve = ["dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower-http"]
 
-# Draw mermaid diagrams here rather than in the reader's browser, with `merman`.
-# A page then needs no drawing module, which is 5.6 MB of JavaScript it would
-# otherwise have to fetch and run before showing anything.
-mermaid-svg = ["dep:merman"]
+# Draw mermaid diagrams, with `merman`. Without it a diagram renders as the
+# listing block it was written as.
+mermaid = ["dep:merman"]
 
 # MathJax, vendored so a page with equations needs no network. It is 2.2 MB of
 # JavaScript compiled into the binary, which is the whole cost of the feature.

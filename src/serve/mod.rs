@@ -58,7 +58,6 @@ use crate::{
     render::{
         Options,
         Page,
-        diagram,
         escape_text,
     },
     serve::reload::Reload,
@@ -119,13 +118,6 @@ pub fn run(args: &ServeArgs) -> Result<()> {
     // A served page reaches the drawing module through this server rather than
     // through the network, so it is pointed at the endpoint below.
     let mut options = crate::options(&args.common, false)?;
-
-    if crate::uses_vendored_mermaid(&args.common) {
-        options.mermaid = Some(diagram::Source::Url(format!(
-            "{INTERNAL_PREFIX}{VENDORED_ENDPOINT}/{}",
-            diagram::BUNDLE_FILE
-        )));
-    }
 
     #[cfg(feature = "math")]
     if crate::uses_vendored_mathjax(&args.common) {
@@ -437,8 +429,9 @@ impl Site {
     fn vendored(file: &str) -> Response {
         // MathJax's loader asks for its AsciiMath processor by a path relative
         // to the bundle, so that name is served as it comes.
-        let module = match file {
-            _ if file == diagram::BUNDLE_FILE => Some(diagram::BUNDLE),
+        // Annotated because a build with no vendored module at all leaves only
+        // the `None` arm, and nothing then says what it is a `None` of.
+        let module: Option<&'static str> = match file {
             #[cfg(feature = "math")]
             _ if file == math::BUNDLE_FILE => Some(math::BUNDLE),
             #[cfg(feature = "math")]

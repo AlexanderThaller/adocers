@@ -37,6 +37,9 @@ pub const BUNDLE: &str = include_str!("../../vendor/mathjax/tex-mml-svg.js");
 #[cfg(feature = "math")]
 pub const ASCIIMATH: &str = include_str!("../../vendor/mathjax/input/asciimath.js");
 
+/// Directory a file render puts its assets in, relative to the page.
+pub const ASSET_DIR: &str = "adocers-assets";
+
 /// File name the bundle is written and served under.
 ///
 /// The version is part of the name on purpose: the bundle cannot change under

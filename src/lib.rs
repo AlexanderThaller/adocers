@@ -35,10 +35,6 @@ use crate::{
     diagnostics::Reporter,
     render::{
         Options,
-        diagram::{
-            self,
-            Source,
-        },
         math,
     },
 };
@@ -130,30 +126,13 @@ pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
     })
 }
 
-/// Where diagrams are drawn from, or `None` when they are not to be drawn.
+/// Whether a mermaid block is drawn as a diagram.
 ///
-/// Without `--mermaid-url` this names the copy vendored into this binary, at
-/// the path a file render writes it to. Whoever is producing the page — the
-/// file writer, or the server — replaces that with the path its own reader
-/// will be able to reach; see [`uses_vendored_mermaid`].
-fn mermaid(common: &CommonArgs) -> Option<Source> {
-    if common.no_mermaid {
-        return None;
-    }
-
-    Some(Source::Url(match &common.mermaid_url {
-        Some(url) => url.clone(),
-        None => diagram::ASSET_HREF.to_string(),
-    }))
-}
-
-/// Whether diagrams are drawn from the vendored copy rather than a URL the
-/// author named.
-///
-/// Only then does the caller have to put that copy somewhere the page can
-/// reach: beside it on disk, or behind the server's own reserved path.
-pub fn uses_vendored_mermaid(common: &CommonArgs) -> bool {
-    !common.no_mermaid && common.mermaid_url.is_none()
+/// Drawing happens here, while the page is being built, so there is nothing for
+/// the page to fetch and nothing to place beside it. A build without the
+/// `mermaid` feature draws nothing whatever this says.
+fn mermaid(common: &CommonArgs) -> bool {
+    cfg!(feature = "mermaid") && !common.no_mermaid
 }
 
 /// Where equations are typeset from, or `None` when they are to be left as the

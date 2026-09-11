@@ -221,8 +221,7 @@ impl<'src> Renderer<'src> {
     fn listing(&mut self, block: &'src Block<'src>, content: &'src Content<'src>) {
         let rendered = content.rendered_html();
 
-        if self.options.mermaid.is_some() && self.is_mermaid(block) {
-            self.mermaid_block(block, rendered);
+        if self.options.mermaid && self.is_mermaid(block) && self.mermaid_block(block, rendered) {
             return;
         }
 
@@ -344,7 +343,7 @@ impl<'src> Renderer<'src> {
     ///
     /// Each diagram gets a name of its own, because the markup carries an id
     /// and two elements on a page may not share one.
-    #[cfg(feature = "mermaid-svg")]
+    #[cfg(feature = "mermaid")]
     fn drawn(&mut self, content: &str) -> Option<String> {
         self.drawings += 1;
 
@@ -357,7 +356,7 @@ impl<'src> Renderer<'src> {
     }
 
     /// Never draws: `merman` is not compiled in.
-    #[cfg(not(feature = "mermaid-svg"))]
+    #[cfg(not(feature = "mermaid"))]
     #[expect(
         clippy::unused_self,
         reason = "the other half of this pair keeps a counter, and both are called the same way"
@@ -409,8 +408,7 @@ impl<'src> Renderer<'src> {
 
     /// `<div class="literalblock">`.
     fn literal(&mut self, block: &'src Block<'src>, content: &str) {
-        if self.options.mermaid.is_some() && self.is_mermaid(block) {
-            self.mermaid_block(block, content);
+        if self.options.mermaid && self.is_mermaid(block) && self.mermaid_block(block, content) {
             return;
         }
 
@@ -428,33 +426,27 @@ impl<'src> Renderer<'src> {
     /// The wrapper carries `imageblock` so that a stylesheet written for
     /// Asciidoctor centres the diagram and puts its caption underneath, the way
     /// it would for a diagram that had been rendered to an image.
-    fn mermaid_block(&mut self, block: &'src Block<'src>, content: &str) {
+    /// Returns whether the diagram was drawn. One this build cannot read is
+    /// left to the caller, which renders it as the listing block it was written
+    /// as — the source of a diagram being more use to a reader than a gap.
+    fn mermaid_block(&mut self, block: &'src Block<'src>, content: &str) -> bool {
+        let Some(svg) = self.drawn(content) else {
+            return false;
+        };
+
         let classes = wrapper_classes(block, &["imageblock", "diagram"]);
         let classes: Vec<&str> = classes.iter().map(String::as_str).collect();
 
         self.out.open("div", block.id(), &classes);
         self.out.open("div", None, &["content"]);
-
-        // Drawn here if this build can and the diagram is one it understands.
-        // A diagram it declines falls through to the browser, which is where
-        // every diagram used to be drawn.
-        if let Some(svg) = self.drawn(content) {
-            self.out.line(&svg);
-        } else {
-            self.diagrams = true;
-
-            // `content` is already escaped, which is what mermaid needs: the
-            // browser turns `--&gt;` back into `-->` when the script reads the
-            // element's text, and an unescaped `<` would have ended the element.
-            self.out
-                .line(&format!("<pre class=\"mermaid\">{content}</pre>"));
-        }
-
+        self.out.line(&svg);
         self.out.close("div");
 
         // A diagram's caption sits below it, as an image's does.
         self.block_title(block);
         self.out.close("div");
+
+        true
     }
 
     /// A section heading and its body.
