@@ -630,9 +630,75 @@ impl Toc {
 }
 
 impl Emitter {
-    /// Inline content, with its equations typeset.
-    fn prose(&self, html: &str) -> String {
-        prose(html, self.options.math)
+    /// Inline content, with its equations typeset and its pictures placed.
+    fn prose(&mut self, html: &str) -> String {
+        let converted = prose(html, self.options.math);
+
+        self.pictures(&converted)
+    }
+
+    /// Put the pictures a line of text carries into the document.
+    ///
+    /// `inline` leaves a marker where it found one, because placing a picture
+    /// needs the directory the document was read from and a place to keep the
+    /// bytes, and neither reaches a function that only knows about markup.
+    ///
+    /// A picture that cannot be read — a URL, a path that does not resolve —
+    /// keeps the words the author gave it instead, which is what the marker
+    /// carries along with the name.
+    fn pictures(&mut self, markup: &str) -> String {
+        let mut out = String::with_capacity(markup.len());
+        let mut rest = markup;
+
+        while let Some(at) = rest.find(inline::PICTURE) {
+            out.push_str(&rest[..at]);
+            rest = &rest[at + inline::PICTURE.len()..];
+
+            let Some((marker, tail)) = rest.split_once(inline::PICTURE) else {
+                out.push_str(inline::PICTURE);
+                break;
+            };
+
+            rest = tail;
+
+            // The marker is the source, the height it asked for and the words
+            // to fall back on, in that order.
+            let mut parts = marker.splitn(3, inline::FIELD);
+            let (Some(target), Some(height), Some(words)) =
+                (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+
+            match self.picture(target, height) {
+                Some(placed) => out.push_str(&placed),
+                None => out.push_str(words),
+            }
+        }
+
+        out.push_str(rest);
+        out
+    }
+
+    /// One picture in a line of text, if it can be read from disk.
+    fn picture(&mut self, target: &str, height: &str) -> Option<String> {
+        let name = format!("/{target}");
+
+        if !self.images.iter().any(|(known, _)| *known == name) {
+            let bytes = std::fs::read(self.base.join(target)).ok()?;
+
+            self.images.push((name.clone(), bytes));
+        }
+
+        // A picture in a line of text is an icon or a mark, so it is set to the
+        // height of the line unless the author asked for another — theirs is in
+        // pixels, which is three quarters of a point.
+        let height = height.parse::<f64>().map_or_else(
+            |_| "1em".to_string(),
+            |pixels| format!("{}pt", pixels * 0.75),
+        );
+
+        Some(format!("#box(image({}, height: {height}))", string(&name)))
     }
 
     /// Write the outline, once.
@@ -794,11 +860,13 @@ impl Emitter {
 
         let caption = block.caption().unwrap_or_default();
 
+        let caption = self.prose(caption);
+        let title = self.prose(title);
+
         let _ = writeln!(
             self.out,
-            "#block(above: 1em, below: 0.5em)[#text(weight: \"bold\", size: 9.5pt)[{}{}]]\n",
-            self.prose(caption),
-            self.prose(title)
+            "#block(above: 1em, below: 0.5em)[#text(weight: \"bold\", size: \
+             9.5pt)[{caption}{title}]]\n"
         );
     }
 
@@ -894,7 +962,8 @@ impl Emitter {
         let name = format!("/diagram-{}.svg", self.images.len());
         self.images.push((name.clone(), svg.into_bytes()));
 
-        self.figure(&name, raw);
+        // A diagram is drawn to the size it needs and no other.
+        self.figure(&name, raw, "");
 
         true
     }
@@ -1096,10 +1165,11 @@ impl Emitter {
         }
 
         if let Some(attribution) = quote.attribution() {
+            let attribution = self.prose(attribution);
+
             let _ = writeln!(
                 self.out,
-                "#text(size: 9pt, fill: rgb(\"#656d77\"))[— {}]",
-                self.prose(attribution)
+                "#text(size: 9pt, fill: rgb(\"#656d77\"))[— {attribution}]"
             );
         }
 
@@ -1125,11 +1195,17 @@ impl Emitter {
 
         self.images.push((format!("/{target}"), bytes));
 
-        self.figure(&format!("/{target}"), media);
+        // The size the author asked for, in the pixels AsciiDoc measures in.
+        // A picture that says nothing is placed at its own size, and either way
+        // one wider than the column is brought down to fit.
+        let width = attrlist_size(media, "width", 2);
+        let height = attrlist_size(media, "height", 3);
+
+        self.figure(&format!("/{target}"), media, &size(width, height));
     }
 
     /// A picture, with its caption beneath it and held on the same page.
-    fn figure<'src>(&mut self, name: &str, block: &impl IsBlock<'src>) {
+    fn figure<'src>(&mut self, name: &str, block: &impl IsBlock<'src>, size: &str) {
         let caption = match block.title() {
             Some(title) => {
                 let label = self.figure_caption(block.title().is_some());
@@ -1146,7 +1222,7 @@ impl Emitter {
 
         let _ = writeln!(
             self.out,
-            "#block(breakable: false, width: 100%)[#figure(fitted(image({})){caption})]\n",
+            "#block(breakable: false, width: 100%)[#figure(fitted(image({}{size})){caption})]\n",
             string(name)
         );
     }
@@ -1450,6 +1526,45 @@ fn is_diagram(block: &Block<'_>) -> bool {
 #[cfg(not(feature = "mermaid"))]
 fn is_diagram(_block: &Block<'_>) -> bool {
     false
+}
+
+/// One of a picture's size attributes, named or in its place in the macro.
+fn attrlist_size(
+    media: &asciidoc_parser::blocks::MediaBlock<'_>,
+    name: &str,
+    index: usize,
+) -> Option<f64> {
+    let attrlist = media.macro_attrlist();
+
+    let value = attrlist
+        .named_attribute(name)
+        .or_else(|| {
+            attrlist
+                .nth_attribute(index)
+                .filter(|attribute| attribute.name().is_none())
+        })
+        .map(asciidoc_parser::attributes::ElementAttribute::value)
+        .filter(|value| !value.is_empty())?;
+
+    value.trim().trim_end_matches('%').parse().ok()
+}
+
+/// What a picture's declared size is as an argument to Typst's `image`.
+///
+/// AsciiDoc measures in pixels and Typst in points, which are three quarters as
+/// many. A picture that declares neither is placed at its own size.
+fn size(width: Option<f64>, height: Option<f64>) -> String {
+    let mut out = String::new();
+
+    if let Some(width) = width {
+        let _ = write!(out, ", width: {}pt", width * 0.75);
+    }
+
+    if let Some(height) = height {
+        let _ = write!(out, ", height: {}pt", height * 0.75);
+    }
+
+    out
 }
 
 /// A label, written so that Typst attaches it to what comes before it.

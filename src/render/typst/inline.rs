@@ -40,16 +40,12 @@ fn element(tag: &str, rest: &mut &str) -> String {
         .unwrap_or_default()
         .to_lowercase();
 
-    // Empty elements carry nothing to translate — except a picture, which
-    // cannot be drawn in the middle of a line here but should not leave a hole
-    // in the sentence either.
+    // Empty elements carry nothing to translate, except a picture, which is
+    // marked for the caller to place: reading it from disk needs more than this
+    // knows about.
     match name.as_str() {
         "br" => return "\\\n".to_string(),
-        "img" => {
-            return attribute(tag, "alt")
-                .map(|alt| escape(&alt))
-                .unwrap_or_default();
-        }
+        "img" => return picture(tag),
         "hr" | "wbr" => return String::new(),
         _ => {}
     }
@@ -82,6 +78,31 @@ fn element(tag: &str, rest: &mut &str) -> String {
         // Everything else contributes its text and nothing else.
         _ => inner,
     }
+}
+
+/// What a picture in a line of text is left as, for the caller to replace.
+///
+/// Placing one needs the directory the document was read from and somewhere to
+/// keep the bytes; this knows only about markup. So the picture is written as a
+/// marker — the source, the height it asked for and the words to fall back on,
+/// between two of a character no document contains.
+pub const PICTURE: &str = "\u{2}";
+
+/// What separates the three things a picture's marker carries.
+pub const FIELD: &str = "\u{1}";
+
+/// One picture, as the marker the caller reads.
+fn picture(tag: &str) -> String {
+    let Some(source) = attribute(tag, "src") else {
+        return String::new();
+    };
+
+    let words = attribute(tag, "alt")
+        .map(|alt| escape(&alt))
+        .unwrap_or_default();
+    let height = attribute(tag, "height").unwrap_or_default();
+
+    format!("{PICTURE}{source}{FIELD}{height}{FIELD}{words}{PICTURE}")
 }
 
 /// Whether a `<sup>` is a footnote's mark rather than an ordinary superscript.
@@ -367,8 +388,11 @@ mod tests {
     }
 
     #[test]
-    fn names_a_picture_it_cannot_draw() {
-        assert_eq!(typst(r#"<img src="tip.svg" alt="Tip">"#), "Tip");
+    fn marks_a_picture_for_the_caller_to_place() {
+        assert_eq!(
+            typst(r#"<img src="tip.svg" alt="Tip" height="16">"#),
+            "\u{2}tip.svg\u{1}16\u{1}Tip\u{2}"
+        );
     }
 
     #[test]
