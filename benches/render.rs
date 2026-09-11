@@ -203,6 +203,12 @@ fn render_highlighted(criterion: &mut Criterion) {
 /// That means process startup is in the number. The `no-highlight` case is
 /// here to subtract it: the difference between the two is what the grammars
 /// cost a one-shot render. A `serve` process pays it once and never again.
+///
+/// `showcase-once` and `showcase-twice` ask the other end of the same question.
+/// They differ by one whole document, so the gap between them is what a
+/// document costs, and everything else is setup paid once however many
+/// documents follow — which for an unhighlighted render turns out to be most
+/// of it.
 #[cfg(feature = "highlight")]
 fn cold_start(criterion: &mut Criterion) {
     use std::process::{
@@ -214,23 +220,51 @@ fn cold_start(criterion: &mut Criterion) {
     let document = std::env::temp_dir().join("adocers-bench-one-block.adoc");
     std::fs::write(&document, ONE_SOURCE_BLOCK).expect("scratch file is writable");
 
+    // A directory rather than standard output, because `-o -` takes one
+    // document and `showcase-twice` hands over two.
+    let output = std::env::temp_dir().join("adocers-bench-out");
+    std::fs::create_dir_all(&output).expect("scratch directory is writable");
+
     let mut group = criterion.benchmark_group("cold-start");
 
     // A whole process per iteration, so there is no point taking hundreds.
     group.sample_size(20);
 
-    for (name, flag) in [
-        ("highlight", &[][..]),
-        ("no-highlight", &["--no-highlight"][..]),
-    ] {
+    let showcase = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/showcase.adoc");
+
+    // The second document has to have a different name, or the two renders
+    // would write to the same file.
+    let copy = output.join("showcase-copy.adoc");
+    std::fs::copy(&showcase, &copy).expect("the showcase is readable");
+
+    let runs: [(&str, &[&str], Vec<&Path>); 4] = [
+        ("one-block", &[], vec![document.as_path()]),
+        (
+            "one-block-no-highlight",
+            &["--no-highlight"],
+            vec![document.as_path()],
+        ),
+        (
+            "showcase-once",
+            &["--no-highlight"],
+            vec![showcase.as_path()],
+        ),
+        (
+            "showcase-twice",
+            &["--no-highlight"],
+            vec![showcase.as_path(), copy.as_path()],
+        ),
+    ];
+
+    for (name, flags, inputs) in runs {
         group.bench_function(name, |b| {
             b.iter(|| {
                 let status = Command::new(binary)
                     .args(["render", "--fragment", "-q"])
-                    .args(flag)
+                    .args(flags)
                     .arg("-o")
-                    .arg("-")
-                    .arg(&document)
+                    .arg(&output)
+                    .args(&inputs)
                     .stdout(Stdio::null())
                     .status()
                     .expect("the binary runs");
@@ -245,25 +279,63 @@ fn cold_start(criterion: &mut Criterion) {
     let _ = std::fs::remove_file(&document);
 }
 
-/// The whole pipeline as the command line runs it: read, parse, render, page.
+/// The whole pipeline as the command line runs it.
+///
+/// This calls [`adocers::job::render_file`], the function the CLI calls, rather
+/// than assembling the steps by hand — so it reads the file, configures the
+/// parser the way the tool configures it, reports diagnostics, and renders a
+/// full page. Measuring the steps separately understated this badly: the
+/// parser does its inline substitution lazily and remembers the result, so a
+/// benchmark that parses once and renders in a loop is timing a warm document
+/// that the command line never sees.
 fn pipeline(criterion: &mut Criterion) {
+    use adocers::{
+        cli::CommonArgs,
+        job,
+    };
+    use clap::Parser as _;
+
+    // Everything at its default, as a bare `adocers <file>` would have it,
+    // except that diagnostics go nowhere: a benchmark should not be timing
+    // writes to a terminal.
+    #[derive(clap::Parser)]
+    struct Defaults {
+        #[command(flatten)]
+        common: CommonArgs,
+    }
+
+    let common = Defaults::parse_from(["adocers", "--quiet", "--color", "never"]).common;
+    let reporter = adocers::reporter(&common);
+    let options = adocers::options(&common, false).expect("default options");
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let scratch = std::env::temp_dir().join("adocers-bench-corpus");
+    std::fs::create_dir_all(&scratch).expect("scratch directory is writable");
+
     let mut group = criterion.benchmark_group("pipeline");
 
-    let options = Options {
-        stylesheet: Some(render::default_stylesheet()),
-        icons: true,
-        highlight: cfg!(feature = "highlight"),
-        ..Options::default()
-    };
-
     for (name, source) in corpus() {
-        group.throughput(Throughput::Bytes(source.len() as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(name), &source, |b, source| {
-            b.iter(|| {
-                let mut parser = Parser::default();
-                let document = parser.parse(black_box(source.as_str()));
+        // The synthetic documents have to exist on disk, because the function
+        // under test takes a path.
+        let path = match name {
+            "showcase" => root.join("resources/showcase.adoc"),
+            "writers-guide" => {
+                root.join("resources/asciidoctor.org/docs/asciidoc-writers-guide.adoc")
+            }
+            _ => {
+                let path = scratch.join(format!("{name}.adoc"));
+                std::fs::write(&path, &source).expect("scratch file is writable");
+                path
+            }
+        };
 
-                black_box(render::render(&document, &options))
+        group.throughput(Throughput::Bytes(source.len() as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(name), &path, |b, path| {
+            b.iter(|| {
+                black_box(
+                    job::render_file(black_box(path), &common, &options, reporter)
+                        .expect("renders"),
+                )
             });
         });
     }

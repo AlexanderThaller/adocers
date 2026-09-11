@@ -374,12 +374,22 @@ cargo bench -- --baseline before   # after a change
 | `parse` | `asciidoc-parser` alone. The floor under every render, and not this crate's code — worth knowing so a slow document can be blamed correctly. |
 | `render` | The back end with highlighting off: block tree in, markup out. The number to watch when changing `src/render/`. |
 | `render-highlighted` | The same documents with highlighting on, against warm grammars. The difference from `render` is what tree-sitter costs per byte. |
-| `cold-start` | A fresh process per iteration, with and without `--no-highlight`. The difference is what compiling the grammars costs a one-shot render. |
+| `cold-start` | A fresh process per iteration, which is the only way to see what a one-shot render pays. `one-block` against `one-block-no-highlight` is what compiling a grammar costs; `showcase-once` against `showcase-twice` differs by one whole document, so the gap is what a document costs and the rest is setup. |
 | `pipeline` | Parse and render together, with the stylesheet, as the command line does it. |
 
 Each group runs over the showcase, the writer's guide if the submodule is
 checked out, and three synthetic documents — prose, tables and nested lists —
 that isolate the shapes which recurse.
+
+`pipeline` calls `job::render_file`, the function the command line calls,
+rather than assembling the steps by hand. That matters: the parser does its
+inline substitution lazily and remembers the result, so a benchmark that parses
+once and renders in a loop is timing a warm document the command line never
+sees.
+
+The same caution applies to reading `parse` and `render` at all. Both are warm
+numbers — useful for judging a change to the code they cover, and not what a
+single `adocers` run experiences. `cold-start` is where that lives.
 
 ### Profiling
 
