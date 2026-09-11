@@ -355,3 +355,51 @@ render untrusted AsciiDoc and serve the result to other people, run it through a
 sanitizer such as [`ammonia`](https://crates.io/crates/ammonia) first. Safe mode
 does not address this — it governs how far a document may reach outside itself,
 not what it may put on the page.
+
+## Benchmarks and profiling
+
+`benches/render.rs` times the pipeline in the pieces it is actually made of, so
+a change can be judged against the number it was meant to move rather than
+against a total that is mostly something else.
+
+```
+cargo bench                        # everything
+cargo bench -- parse               # one group
+cargo bench -- --save-baseline before
+cargo bench -- --baseline before   # after a change
+```
+
+| Group | What it measures |
+| --- | --- |
+| `parse` | `asciidoc-parser` alone. The floor under every render, and not this crate's code — worth knowing so a slow document can be blamed correctly. |
+| `render` | The back end with highlighting off: block tree in, markup out. The number to watch when changing `src/render/`. |
+| `render-highlighted` | The same documents with highlighting on, against warm grammars. The difference from `render` is what tree-sitter costs per byte. |
+| `cold-start` | A fresh process per iteration, with and without `--no-highlight`. The difference is what compiling the grammars costs a one-shot render. |
+| `pipeline` | Parse and render together, with the stylesheet, as the command line does it. |
+
+Each group runs over the showcase, the writer's guide if the submodule is
+checked out, and three synthetic documents — prose, tables and nested lists —
+that isolate the shapes which recurse.
+
+### Profiling
+
+Benchmarks say *what* got slower. For *where*, sample the binary:
+
+```
+# A flamegraph of one render
+cargo flamegraph --bin adocers -- render -q -o - resources/showcase.adoc
+
+# Or sample it in a browser-based profiler
+samply record ./target/release/adocers render -q -o - resources/showcase.adoc
+
+# Compare two builds end to end, process startup included
+hyperfine './target/release/adocers render -q -o - resources/showcase.adoc' \
+          './old/adocers render -q -o - resources/showcase.adoc'
+```
+
+A release build carries no debug symbols, which makes a flamegraph unreadable.
+Build with them kept:
+
+```
+CARGO_PROFILE_RELEASE_DEBUG=true cargo build --release
+```

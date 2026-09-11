@@ -72,13 +72,6 @@ pub struct Outcome {
 
     /// Whether the document held an equation, and so needs the typesetting
     /// module to be reachable from the page.
-    #[cfg_attr(
-        not(feature = "math"),
-        expect(
-            dead_code,
-            reason = "there is no vendored module to place without the feature"
-        )
-    )]
     pub equations: bool,
 
     /// Diagnostics reported for the document.

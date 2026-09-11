@@ -69,6 +69,10 @@ tree-sitter-toml-ng = { version = "0.7", optional = true }
 tree-sitter-typescript = { version = "0.23", optional = true }
 tree-sitter-yaml = { version = "0.7", optional = true }
 
+[[bench]]
+name = "render"
+harness = false
+
 [lints.rust]
 #missing-docs = "warn"
 missing-debug-implementations = "warn"
@@ -85,6 +89,9 @@ todo = "warn"
 unwrap-used = "warn"
 missing-panics-doc = "allow"
 missing-errors-doc = "allow"
+# The library target exists so the benchmarks can reach the code; it is not an
+# API anyone depends on, so it is not held to one.
+must-use-candidate = "allow"
 
 [profile.deploy]
 inherits = "release"
@@ -92,3 +99,6 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
