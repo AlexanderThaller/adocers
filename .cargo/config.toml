@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-Ctarget-cpu=x86-64-v3", "-Clink-arg=-fuse-ld=mold"]
+rustflags = ["-Ctarget-cpu=x86-64-v3"]
