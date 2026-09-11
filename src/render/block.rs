@@ -237,6 +237,8 @@ impl<'src> Renderer<'src> {
                 .and_then(|language| self.highlighted(language, content))
                 .unwrap_or_else(|| rendered.to_string());
 
+            let body = self.marked(&body);
+
             let language = language
                 .as_deref()
                 .map(escape_attr)
@@ -249,12 +251,26 @@ impl<'src> Renderer<'src> {
                 nowrap(block)
             ));
         } else {
+            let body = self.marked(rendered);
+
             self.out
-                .line(&format!("<pre{}>{rendered}</pre>", pre_class(block)));
+                .line(&format!("<pre{}>{body}</pre>", pre_class(block)));
         }
 
         self.out.close("div");
         self.out.close("div");
+    }
+
+    /// Draw a listing's callout markers, if this run draws marks at all.
+    ///
+    /// `--no-icons` is one switch for both kinds: an admonition falls back to
+    /// its label and a callout to the `(1)` the parser rendered.
+    fn marked(&self, body: &str) -> String {
+        if self.options.icons {
+            callout::iconize(body)
+        } else {
+            body.to_string()
+        }
     }
 
     /// The heading text, with whatever `:sectanchors:` and `:sectlinks:` ask to

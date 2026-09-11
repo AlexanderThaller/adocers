@@ -170,6 +170,30 @@ pre code { background: none; padding: 0; }
 /* A callout keeps its own weight against whatever the highlighter did. */
 .listingblock .conum { color: var(--accent); font-weight: 600; font-style: normal; }
 
+/* A callout mark, drawn rather than written: Asciidoctor's markup for it names
+   a Font Awesome glyph, and a page this tool produced has no way to pull in
+   that webfont. The number is in the markup as data, so a circle and a counter
+   are the whole of it, and the `(1)` beside it — which is what a page with no
+   stylesheet shows — is hidden once the mark is drawn. */
+.conum[data-value] {
+  display: inline-block; width: 1.3em; height: 1.3em; line-height: 1.3em;
+  border-radius: 50%; background: var(--accent); color: var(--bg);
+  text-align: center; font-family: inherit; font-size: 0.8em; font-style: normal;
+  font-weight: 600; vertical-align: 0.05em;
+}
+.conum[data-value]::after { content: attr(data-value); }
+.conum[data-value] + b { display: none; }
+/* The list beneath the block marks its items the same way, so an item and the
+   line it annotates carry the same mark. */
+.colist.conums > ol { list-style: none; padding-left: 0; counter-reset: conum; }
+.colist.conums > ol > li { counter-increment: conum; position: relative; padding-left: 2em; }
+.colist.conums > ol > li::before {
+  content: counter(conum); position: absolute; left: 0; top: 0.1em;
+  display: inline-block; width: 1.3em; height: 1.3em; line-height: 1.3em;
+  border-radius: 50%; background: var(--accent); color: var(--bg);
+  text-align: center; font-size: 0.8em; font-weight: 600;
+}
+
 /* Quotes */
 .quoteblock { margin: 1.25rem 0; }
 .quoteblock blockquote { margin: 0; padding: 0.25rem 0 0.25rem 1.25rem; border-left: 4px solid var(--rule); color: var(--fg); }

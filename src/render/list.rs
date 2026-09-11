@@ -110,7 +110,15 @@ impl<'src> Renderer<'src> {
 
     /// `<1>` callouts, which annotate the listing block above them.
     fn callout_list(&mut self, block: &'src Block<'src>, list: &'src ListBlock<'src>) {
-        let wrapper = block::wrapper_classes(block, &["colist", "arabic"]);
+        // `conums` says the items are marked the way the listing above them is,
+        // which is only true when this run draws marks at all.
+        let shape: &[&str] = if self.options.icons {
+            &["colist", "arabic", "conums"]
+        } else {
+            &["colist", "arabic"]
+        };
+
+        let wrapper = block::wrapper_classes(block, shape);
 
         let wrapper: Vec<&str> = wrapper.iter().map(String::as_str).collect();
         self.out.open("div", block.id(), &wrapper);

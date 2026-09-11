@@ -12,6 +12,8 @@
 //! back the decision it already made, and gives up — leaving the parser's own
 //! rendering to be used — the moment the two do not agree.
 
+use std::fmt::Write as _;
+
 /// A callout marker, and the line it was found on.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Callout {
@@ -95,6 +97,42 @@ pub fn reapply(highlighted: &str, callouts: &[Callout]) -> String {
         )
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Draw every callout marker in `html` as a numbered mark.
+///
+/// The markup is Asciidoctor's own for `:icons: font`: an empty element
+/// carrying the number as data, followed by the text form it replaces. A
+/// stylesheet draws the first and hides the second — this one with a circle of
+/// its own, Asciidoctor's with a Font Awesome glyph — and a page with no
+/// stylesheet at all still reads, because the text form is still there.
+pub fn iconize(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+
+    while let Some(at) = rest.find(CONUM_OPEN) {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+
+        let after = &rest[CONUM_OPEN.len()..];
+        let number: String = after.chars().take_while(char::is_ascii_digit).collect();
+
+        // Not a marker after all: leave the text as it stands and carry on
+        // past it, so one oddity cannot stop the rest being drawn.
+        if number.is_empty() {
+            out.push_str(&rest[..CONUM_OPEN.len()]);
+            rest = &rest[CONUM_OPEN.len()..];
+
+            continue;
+        }
+
+        let _ = write!(out, "<i class=\"conum\" data-value=\"{number}\"></i>");
+        out.push_str(&rest[..CONUM_OPEN.len()]);
+        rest = &rest[CONUM_OPEN.len()..];
+    }
+
+    out.push_str(rest);
+    out
 }
 
 /// The callout numbers the parser rendered, in document order.

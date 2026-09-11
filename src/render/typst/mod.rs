@@ -52,23 +52,30 @@ use asciidoc_parser::{
     document::TocMode,
 };
 
-use crate::render::typst::inline::{
-    string,
-    typst as inline_markup,
+use crate::render::{
+    Options,
+    typst::inline::{
+        string,
+        typst as inline_markup,
+    },
 };
 
 /// Render `document` as a PDF.
 ///
 /// `base` is the directory the document was read from, which is where the
 /// images it names are looked for.
-pub fn pdf(document: &Document<'_>, base: &Path) -> Result<Vec<u8>> {
-    let (source, images) = markup(document, base);
+pub fn pdf(document: &Document<'_>, base: &Path, options: &Options) -> Result<Vec<u8>> {
+    let (source, images) = markup(document, base, options);
 
     compile(&source, &images)
 }
 
 /// The Typst markup for a document, and the image files it refers to.
-pub fn markup(document: &Document<'_>, base: &Path) -> (String, Vec<(String, Vec<u8>)>) {
+pub fn markup(
+    document: &Document<'_>,
+    base: &Path,
+    options: &Options,
+) -> (String, Vec<(String, Vec<u8>)>) {
     let mut out = Preamble::new(document).to_string();
 
     let mut emitter = Emitter {
@@ -77,6 +84,7 @@ pub fn markup(document: &Document<'_>, base: &Path) -> (String, Vec<(String, Vec
         images: Vec::new(),
         labels: std::collections::HashSet::new(),
         toc: Toc::of(document),
+        options: options.clone(),
     };
 
     // An outline placed above the content goes between the title block and the
@@ -91,7 +99,6 @@ pub fn markup(document: &Document<'_>, base: &Path) -> (String, Vec<(String, Vec
         emitter.outline(emitter.toc.levels, &emitter.toc.title.clone());
     }
 
-    emitter.footnotes(document);
     out.push_str(&prune_links(&emitter.out, &emitter.labels));
 
     (out, emitter.images)
@@ -151,6 +158,43 @@ const FITTED: &str = "#let fitted(body) = layout(size => {\n\x20 let natural = \
                       natural > size.width {\n\x20   scale(body, x: factor, y: factor, reflow: \
                       true, origin: top + left)\n\x20 } else { body }\n})";
 
+/// Mark a callout list's item the way the listing above it is marked.
+///
+/// The same circled characters, so an item and the line it annotates read as
+/// the same mark; above twenty there is none, and the plain number stands.
+const CALLOUT: &str = "#let adoccallout(n) = if n <= 20 { str.from-unicode(0x245F + n) } else { \
+                       numbering(\"(1)\", n) }";
+
+/// The `footnote:[]` definitions, and the helper that places one.
+///
+/// A reference is rendered by the parser as its mark alone, with the text left
+/// in the document's catalogue, so the texts are written out once here and each
+/// reference calls for the one it wants. Typst then puts it at the foot of
+/// whichever page the reference landed on and numbers it itself.
+fn footnotes(document: &Document<'_>) -> String {
+    let texts: Vec<String> = document
+        .catalog()
+        .footnotes()
+        .iter()
+        .map(|footnote| format!("[{}]", inline_markup(&footnote.text)))
+        .collect();
+
+    // One item needs the trailing comma that tells an array from a parenthesis,
+    // and none needs no comma at all.
+    let array = match texts.len() {
+        0 => String::new(),
+        1 => format!("{},", texts[0]),
+        _ => texts.join(", "),
+    };
+
+    // A reference with no definition would be a lookup past the end, which
+    // Typst reports rather than ignores, so it is guarded rather than trusted.
+    format!(
+        "#let adocfootnotes = ({array})\n#let adocfootnote(n) = if n <= adocfootnotes.len() {{ \
+         footnote(adocfootnotes.at(n - 1)) }}"
+    )
+}
+
 /// The page setup and title block that every rendered document opens with.
 struct Preamble(String);
 
@@ -168,9 +212,10 @@ impl Preamble {
              \"1\")\n#set text(size: 10.5pt)\n#set par(justify: true, leading: 0.62em)\n#show \
              heading: it => block(above: 1.4em, below: 0.7em, it)\n#show link: it => text(fill: \
              rgb(\"#1565a8\"), it)\n#show raw.where(block: true): it => block(\n\x20 width: 100%, \
-             fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n",
+             fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n{CALLOUT}\n{}\n",
             string(&title),
-            FITTED
+            FITTED,
+            footnotes(document)
         );
 
         if document.doctitle().is_some() {
@@ -223,6 +268,11 @@ struct Emitter {
 
     /// How the document asked for its outline, and whether one has been placed.
     toc: Toc,
+
+    /// What the command line asked for. The flags that say what a document
+    /// carries — icons, highlighting, diagrams — mean the same here as they do
+    /// on a page; the ones about the page itself mean nothing.
+    options: Options,
 }
 
 /// The table of contents a document asked for.
@@ -318,21 +368,24 @@ impl Emitter {
                     let _ = writeln!(self.out, "#label({})", string(id));
                 }
 
+                // The number, if the document numbers its sections, comes from
+                // the same place the page's does — so an appendix is captioned
+                // and the two agree on every number.
+                let title = format!(
+                    "{}{}",
+                    inline_markup(&crate::render::block::section_prefix(section)),
+                    inline_markup(section.section_title())
+                );
+
                 // A discrete heading is styled like one but is not a section,
                 // so it does not belong in the outline.
                 if section.section_type() == SectionType::Discrete {
                     let _ = writeln!(
                         self.out,
-                        "#heading(level: {level}, outlined: false)[{}]\n",
-                        inline_markup(section.section_title())
+                        "#heading(level: {level}, outlined: false)[{title}]\n"
                     );
                 } else {
-                    let _ = writeln!(
-                        self.out,
-                        "{} {}\n",
-                        "=".repeat(level),
-                        inline_markup(section.section_title())
-                    );
+                    let _ = writeln!(self.out, "{} {title}\n", "=".repeat(level));
                 }
 
                 self.blocks(section.child_blocks());
@@ -396,29 +449,6 @@ impl Emitter {
         }
     }
 
-    /// The `footnote:[]` definitions, gathered at the end of the document.
-    ///
-    /// A reference is rendered inline by the parser as the mark alone, so
-    /// without these the numbers in the text stand for nothing.
-    fn footnotes(&mut self, document: &Document<'_>) {
-        let footnotes = document.catalog().footnotes();
-
-        if footnotes.is_empty() {
-            return;
-        }
-
-        self.out.push_str("#line(length: 100%)\n\n");
-
-        for footnote in footnotes {
-            let _ = writeln!(
-                self.out,
-                "#text(size: 9pt)[{}. {}]\n",
-                inline_markup(&footnote.index),
-                inline_markup(&footnote.text)
-            );
-        }
-    }
-
     /// The `.A title` line a block can carry, with the caption the document
     /// numbers it with.
     fn title(&mut self, block: &Block<'_>) {
@@ -441,7 +471,7 @@ impl Emitter {
     fn raw(&mut self, raw: &asciidoc_parser::blocks::RawDelimitedBlock<'_>) {
         // Taken as text rather than unescaped, because a listing's callouts
         // reach here as `<b class="conum">` and would otherwise be shown.
-        let content = inline::text(raw.content().rendered_html());
+        let content = inline::text(&self.marks(raw.content().rendered_html()));
 
         if self.diagram(raw, &content) {
             return;
@@ -577,14 +607,28 @@ impl Emitter {
         }
     }
 
-    /// A note, tip, warning and so on, set apart with its label.
+    /// A note, tip, warning and so on, set beside its icon.
+    ///
+    /// Laid out the way the page lays it out: the mark in a column of its own,
+    /// and the text beside it behind a rule.
     fn admonition(&mut self, admonition: &asciidoc_parser::blocks::AdmonitionBlock<'_>) {
+        let name = admonition.name().to_string();
         let label = admonition.label().to_string().to_uppercase();
+        let colour = admonition_colour(&name);
+
+        let mark = match self.icon(&name, &label) {
+            Some(path) => format!("#image({}, width: 20pt)", string(&path)),
+
+            // A variant with no icon of its own, or a build asked for none,
+            // falls back to the label rather than to an empty column.
+            None => format!("#text(weight: \"bold\", size: 8pt, fill: rgb(\"{colour}\"))[{label}]"),
+        };
 
         let _ = write!(
             self.out,
-            "#block(width: 100%, inset: (left: 10pt), stroke: (left: 2pt + \
-             rgb(\"#1565a8\")))[\n#text(weight: \"bold\", size: 9pt)[{label}]\n\n"
+            "#grid(\n  columns: (34pt, 1fr),\n  column-gutter: 10pt,\n  align(center + \
+             horizon)[{mark}],\n  block(width: 100%, inset: (left: 11pt), stroke: (left: 1pt + \
+             rgb(\"#dcdfe4\")))[\n"
         );
 
         // The paragraph form — `TIP: text` — carries its text directly and has
@@ -598,7 +642,67 @@ impl Emitter {
             None => self.blocks(admonition.child_blocks()),
         }
 
-        self.out.push_str("]\n\n");
+        self.out.push_str("],\n)\n\n");
+    }
+
+    /// Draw a listing's callout markers, if this run draws marks at all.
+    ///
+    /// A circled number is a character here rather than something drawn, which
+    /// means it sits in the line of code exactly where the marker was without
+    /// anything being laid over the text. Above twenty there is no such
+    /// character, and the `(21)` the parser wrote stands.
+    fn marks(&self, html: &str) -> String {
+        if !self.options.icons {
+            return html.to_string();
+        }
+
+        let mut out = String::with_capacity(html.len());
+        let mut rest = html;
+
+        while let Some(at) = rest.find(CONUM) {
+            out.push_str(&rest[..at]);
+            rest = &rest[at + CONUM.len()..];
+
+            let number: String = rest.chars().take_while(char::is_ascii_digit).collect();
+
+            let Some(mark) = number.parse().ok().and_then(circled) else {
+                out.push_str(CONUM);
+                continue;
+            };
+
+            let Some(end) = rest.find("</b>") else {
+                out.push_str(CONUM);
+                continue;
+            };
+
+            out.push(mark);
+            rest = &rest[end + "</b>".len()..];
+        }
+
+        out.push_str(rest);
+        out
+    }
+
+    /// The icon for an admonition, as a file the compiler can place.
+    ///
+    /// The page's own SVG, with its colour written in: it is drawn in
+    /// `currentColor` so that one rule themes it and it follows the reader's
+    /// colour scheme, and a PDF has neither a rule nor a reader.
+    fn icon(&mut self, name: &str, label: &str) -> Option<String> {
+        if !self.options.icons {
+            return None;
+        }
+
+        let path = format!("/icon-{name}.svg");
+
+        if !self.images.iter().any(|(known, _)| *known == path) {
+            let svg = crate::render::icons::admonition(name, label)?
+                .replace("currentColor", admonition_colour(name));
+
+            self.images.push((path.clone(), svg.into_bytes()));
+        }
+
+        Some(path)
     }
 
     /// A quotation, with its attribution below.
@@ -698,6 +802,15 @@ impl Emitter {
             let _ = writeln!(self.out, "#set enum(numbering: {})", string(pattern));
         }
 
+        // A callout list is marked the way the listing above it is, so an item
+        // and the line it annotates carry the same mark.
+        let marked = list.type_() == ListType::Callout && self.options.icons;
+
+        if marked {
+            self.out
+                .push_str("#set enum(numbering: n => adoccallout(n))\n");
+        }
+
         if let Some(start) = start {
             let _ = writeln!(self.out, "#set enum(start: {start})");
         }
@@ -717,10 +830,10 @@ impl Emitter {
         }
 
         for item in items {
-            let marker = match list.type_() {
-                ListType::Ordered => "+",
+            let bullet = match list.type_() {
+                ListType::Ordered | ListType::Callout => "+",
                 ListType::Description => "/",
-                _ => "-",
+                ListType::Unordered => "-",
             };
 
             // A term list writes the term before the colon; every other kind
@@ -736,14 +849,14 @@ impl Emitter {
             };
 
             let body = self.item(item);
-            let _ = writeln!(self.out, "{marker} {term}{body}");
+            let _ = writeln!(self.out, "{bullet} {term}{body}");
         }
 
         if start.is_some() {
             self.out.push_str("#set enum(start: 1)\n");
         }
 
-        if reversed || pattern.is_some() {
+        if reversed || marked || pattern.is_some() {
             let _ = writeln!(self.out, "#set enum(numbering: {})", string(ARABIC));
         }
 
@@ -909,6 +1022,34 @@ fn is_diagram(_block: &Block<'_>) -> bool {
     false
 }
 
+/// The markup the parser renders a callout marker as, up to its number.
+const CONUM: &str = "<b class=\"conum\">(";
+
+/// A number in a circle, for the callouts a listing and its list share.
+///
+/// The characters run from one to twenty and stop, so anything past that has
+/// none and keeps the number the parser wrote.
+fn circled(number: u32) -> Option<char> {
+    (1..=20)
+        .contains(&number)
+        .then(|| char::from_u32(0x245f + number))
+        .flatten()
+}
+
+/// The colour an admonition's mark is drawn in.
+///
+/// Asciidoctor's own, which is where the page's palette takes them from; the
+/// light values, a printed page being light.
+fn admonition_colour(name: &str) -> &'static str {
+    match name {
+        "tip" => "#b58900",
+        "important" => "#bf6900",
+        "caution" => "#bf3400",
+        "warning" => "#bf0000",
+        _ => "#19407c",
+    }
+}
+
 /// Typst's pattern for ordinary numbering, which is also what a list is put
 /// back to once one that numbered itself differently has ended.
 const ARABIC: &str = "1.";
@@ -1013,11 +1154,22 @@ mod tests {
     use super::*;
     use asciidoc_parser::Parser;
 
+    /// The defaults a render runs with: marks drawn, diagrams drawn.
+    fn options() -> Options {
+        Options {
+            icons: true,
+            highlight: true,
+            mermaid: true,
+            math: true,
+            ..Options::default()
+        }
+    }
+
     fn render(source: &str) -> String {
         let mut parser = Parser::default();
         let document = parser.parse(source);
 
-        markup(&document, Path::new(".")).0
+        markup(&document, Path::new("."), &options()).0
     }
 
     #[test]
@@ -1106,8 +1258,35 @@ mod tests {
     fn keeps_the_text_of_a_paragraph_admonition() {
         let out = render("= T\n\nTIP: Worth knowing.\n");
 
-        assert!(out.contains("TIP"), "{out}");
+        assert!(out.contains("/icon-tip.svg"), "{out}");
         assert!(out.contains("Worth knowing."), "{out}");
+    }
+
+    #[test]
+    fn labels_an_admonition_when_it_draws_no_icon() {
+        let mut parser = Parser::default();
+        let document = parser.parse("= T\n\nTIP: Worth knowing.\n");
+
+        let plain = Options {
+            icons: false,
+            ..options()
+        };
+
+        let out = markup(&document, Path::new("."), &plain).0;
+
+        assert!(out.contains("TIP"), "{out}");
+        assert!(!out.contains("icon-tip"), "{out}");
+    }
+
+    #[test]
+    fn marks_a_callout_and_its_item_the_same_way() {
+        let out = render("= T\n\n----\ncode <1>\n----\n<1> Why.\n");
+
+        assert!(
+            out.contains('\u{2460}'),
+            "the listing keeps its mark: {out}"
+        );
+        assert!(out.contains("adoccallout"), "and so does its list: {out}");
     }
 
     #[test]
@@ -1134,7 +1313,7 @@ mod tests {
         let mut parser = Parser::default();
         let document = parser.parse("= Title\n\n== Section\n\nProse with *bold*.\n\n* a\n* b\n");
 
-        let bytes = pdf(&document, Path::new(".")).expect("compiles");
+        let bytes = pdf(&document, Path::new("."), &options()).expect("compiles");
 
         assert!(bytes.starts_with(b"%PDF"), "should be a PDF");
         assert!(bytes.len() > 1000, "should have content");

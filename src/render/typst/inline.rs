@@ -68,6 +68,11 @@ fn element(tag: &str, rest: &mut &str) -> String {
         "em" | "i" => format!("_{inner}_"),
         "code" => format!("#raw({})", string(&text(&content))),
         "mark" => format!("#highlight[{inner}]"),
+
+        // A footnote's mark, which the parser renders as a bracketed link down
+        // to the definition. A PDF has somewhere better to put it.
+        "sup" if is_footnote(tag) => footnote(&content).unwrap_or(format!("#super[{inner}]")),
+
         "sup" => format!("#super[{inner}]"),
         "sub" => format!("#sub[{inner}]"),
         "del" | "s" => format!("#strike[{inner}]"),
@@ -77,6 +82,27 @@ fn element(tag: &str, rest: &mut &str) -> String {
         // Everything else contributes its text and nothing else.
         _ => inner,
     }
+}
+
+/// Whether a `<sup>` is a footnote's mark rather than an ordinary superscript.
+fn is_footnote(tag: &str) -> bool {
+    attribute(tag, "class").is_some_and(|class| class == "footnote" || class == "footnoteref")
+}
+
+/// One footnote reference, as a call to the helper the preamble defines.
+///
+/// The number is the one the parser assigned, which is also the position of the
+/// definition in the document's catalogue, so the text can be looked up by it.
+fn footnote(content: &str) -> Option<String> {
+    let at = content.find("#_footnotedef_")?;
+    let digits = &content[at + "#_footnotedef_".len()..];
+    let end = digits
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(digits.len());
+
+    let index: usize = digits[..end].parse().ok()?;
+
+    Some(format!("#adocfootnote({index})"))
 }
 
 /// A link, which needs its target as well as its text.
@@ -311,6 +337,18 @@ mod tests {
             text("let v: Vec&lt;String&gt;; // <b class=\"conum\">(1)</b>"),
             "let v: Vec<String>; // (1)"
         );
+    }
+
+    #[test]
+    fn turns_a_footnote_mark_into_a_footnote() {
+        let mark = r##"<sup class="footnote">[<a id="_footnoteref_2" class="footnote" href="#_footnotedef_2" title="View footnote.">2</a>]</sup>"##;
+
+        assert_eq!(typst(mark), "#adocfootnote(2)");
+    }
+
+    #[test]
+    fn leaves_an_ordinary_superscript_alone() {
+        assert_eq!(typst("x<sup>2</sup>"), "x#super[2]");
     }
 
     #[test]

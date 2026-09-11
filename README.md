@@ -324,6 +324,21 @@ of writing the word.
 `--no-icons` goes back to the uppercase text labels, which is what Asciidoctor
 emits when `:icons:` is not set.
 
+### Callout marks
+
+A `<1>` at the end of a line in a listing, and the item in the list beneath the
+block that explains it, are both drawn as a number in a circle, so an item and
+the line it annotates carry the same mark.
+
+The markup is Asciidoctor's own for `:icons: font` — an empty element carrying
+the number as data, followed by the `(1)` it replaces — but the mark is drawn by
+the stylesheet rather than by Font Awesome: a circle, and the number from the
+element's own data. A page with no stylesheet at all still reads, because the
+`(1)` is still there behind the mark.
+
+`--no-icons` is one switch for both kinds of mark: an admonition goes back to
+its label, and a callout to the `(1)` the parser rendered.
+
 ### Mermaid diagrams
 
 A block written as `[mermaid]` or `[source,mermaid]` is drawn as a diagram.
@@ -419,10 +434,15 @@ showcase — 14 pages, five diagrams and a figure — takes about 90 ms.
 This is a second back end rather than a setting on the first (`src/render/typst/`).
 It walks the same block tree and covers the shape of an ordinary document:
 headings, paragraphs, lists, tables with spans and footers, listings, quotes and
-verses, admonitions, images, footnotes, page breaks and cross references. A
-`:toc:` becomes a real outline, with page numbers and links to the sections it
-lists, and a listing is highlighted by the syntaxes Typst carries — the same
-code, read by a different highlighter than the page's tree-sitter one.
+verses, admonitions with their icons, images, page breaks and cross references.
+A `:toc:` becomes a real outline, with page numbers and links to the sections it
+lists; `:sectnums:` numbers the headings from the same place the page's numbers
+come from; a listing is highlighted by the syntaxes Typst carries — the same
+code, read by a different highlighter than the page's tree-sitter one; and a
+`footnote:[]` becomes a real footnote, at the foot of the page its reference
+landed on. Callout marks are the same circled numbers the page draws, as
+characters rather than drawings, so they sit in the line of code where the
+marker was.
 Diagrams are drawn into it as vector graphics, so they are as sharp printed as
 they are on screen; `merman` is asked for SVG text labels rather than the
 `<foreignObject>` HTML ones mermaid normally uses, which a browser lays out and

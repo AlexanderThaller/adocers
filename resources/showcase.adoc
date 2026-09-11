@@ -304,7 +304,8 @@ fn main() {
 }
 ----
 <1> Callouts attach to the lines they mark.
-<2> They render as an ordered list beneath the block, and survive highlighting.
+<2> The list beneath the block carries the same marks, and both survive
+highlighting. `--no-icons` writes them as `(1)` instead of drawing them.
 
 Because a grammar knows what it is reading, `fn` is a keyword where Rust means
 one and ordinary text where it does not — inside the string and the comment
@@ -924,11 +925,14 @@ needs no LaTeX installation, no headless browser and nothing fetched. The fonts
 are the ones Typst carries, so the same document gives the same PDF wherever it
 is run. This page takes about 90 ms.
 
-Almost everything on this page survives the crossing: headings, lists, tables
-with their spans and footers, admonitions, quotes and verses, listings with
-their callouts, images, footnotes and the page breaks below. The diagrams are
-drawn into it as vector graphics rather than pictures of diagrams, so they are
-as sharp printed as they are here.
+Almost everything on this page survives the crossing: headings and their
+numbers, lists, tables with their spans and footers, admonitions with their
+icons, quotes and verses, listings with their highlighting and their callouts,
+images and the page breaks below. A `:toc:` becomes a real outline, with a page
+number against every entry; a `footnote:[]` becomes a real footnote, at the foot
+of the page its reference landed on. The diagrams are drawn into it as vector
+graphics rather than pictures of diagrams, so they are as sharp printed as they
+are here.
 
 Four things are deliberately left short:
 

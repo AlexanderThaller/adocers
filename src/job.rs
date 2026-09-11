@@ -194,7 +194,7 @@ pub fn render_as(
 
     let bytes = match format {
         Format::Html => render::render(&document, options).html.into_bytes(),
-        Format::Pdf => typeset(&document, input.parent().unwrap_or(Path::new(".")))?,
+        Format::Pdf => typeset(&document, input.parent().unwrap_or(Path::new(".")), options)?,
     };
 
     Ok(Outcome {
@@ -206,13 +206,21 @@ pub fn render_as(
 
 /// Typeset a document as a PDF.
 #[cfg(feature = "pdf")]
-fn typeset(document: &asciidoc_parser::Document<'_>, base: &Path) -> Result<Vec<u8>> {
-    render::typst::pdf(document, base)
+fn typeset(
+    document: &asciidoc_parser::Document<'_>,
+    base: &Path,
+    options: &Options,
+) -> Result<Vec<u8>> {
+    render::typst::pdf(document, base, options)
 }
 
 /// Refuse politely: no typesetter is compiled in.
 #[cfg(not(feature = "pdf"))]
-fn typeset(_document: &asciidoc_parser::Document<'_>, _base: &Path) -> Result<Vec<u8>> {
+fn typeset(
+    _document: &asciidoc_parser::Document<'_>,
+    _base: &Path,
+    _options: &Options,
+) -> Result<Vec<u8>> {
     anyhow::bail!("this build cannot write PDFs: it was built without the `pdf` feature")
 }
 
