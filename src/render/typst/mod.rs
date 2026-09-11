@@ -118,7 +118,6 @@ pub fn markup(
         out: String::new(),
         base: base.to_path_buf(),
         images: Vec::new(),
-        labels: std::collections::HashSet::new(),
         toc: Toc::of(document),
         options: options.clone(),
         stem: attribute(document, "stem"),
@@ -137,7 +136,7 @@ pub fn markup(
         emitter.outline(emitter.toc.levels, &emitter.toc.title.clone());
     }
 
-    out.push_str(&prune_links(&emitter.out, &emitter.labels));
+    out.push_str(&prune_links(&emitter.out));
 
     (out, emitter.images)
 }
@@ -539,9 +538,6 @@ struct Emitter {
     /// The images referred to, with their contents, for the compiler.
     images: Vec<(String, Vec<u8>)>,
 
-    /// Every label emitted, so a reference to one that is not can be found.
-    labels: std::collections::HashSet<String>,
-
     /// How the document asked for its outline, and whether one has been placed.
     toc: Toc,
 
@@ -650,13 +646,6 @@ impl Emitter {
             Block::Section(section) => {
                 let level = section.level().clamp(1, 6);
 
-                if section.section_type() != SectionType::Discrete
-                    && let Some(id) = section.id()
-                {
-                    self.labels.insert(id.to_string());
-                    let _ = writeln!(self.out, "#label({})", string(id));
-                }
-
                 // The number, if the document numbers its sections, comes from
                 // the same place the page's does — so an appendix is captioned
                 // and the two agree on every number.
@@ -666,15 +655,21 @@ impl Emitter {
                     self.prose(section.section_title())
                 );
 
+                // The label goes after the heading, not before it: Typst
+                // attaches one to the element in front of it, so a label
+                // written above a heading belongs to whatever came before —
+                // which is where a reference to the section would have landed.
+                let label = section.id().map(anchor).unwrap_or_default();
+
                 // A discrete heading is styled like one but is not a section,
                 // so it does not belong in the outline.
                 if section.section_type() == SectionType::Discrete {
                     let _ = writeln!(
                         self.out,
-                        "#heading(level: {level}, outlined: false)[{title}]\n"
+                        "#heading(level: {level}, outlined: false)[{title}]{label}\n"
                     );
                 } else {
-                    let _ = writeln!(self.out, "{} {title}\n", "=".repeat(level));
+                    let _ = writeln!(self.out, "{} {title}{label}\n", "=".repeat(level));
                 }
 
                 self.blocks(section.child_blocks());
@@ -1296,6 +1291,46 @@ impl Emitter {
     }
 }
 
+/// Every label the markup defines, as against the ones it refers to.
+///
+/// A definition is written either as `<name>` after a heading or as a
+/// `#label("name")` call; a reference is always `#link(label("name"))`, which
+/// is what tells the two apart.
+fn defined(markup: &str) -> std::collections::HashSet<String> {
+    let mut labels = std::collections::HashSet::new();
+    let mut rest = markup;
+
+    while let Some(at) = rest.find("#label(\"") {
+        let before = &rest[..at];
+        let after = &rest[at + "#label(\"".len()..];
+
+        if let Some(quote) = after.find("\")")
+            && !before.ends_with("#link(")
+        {
+            labels.insert(after[..quote].to_string());
+        }
+
+        rest = after;
+    }
+
+    // A heading's own label, which is the last thing on its line.
+    for line in markup.lines() {
+        let Some(name) = line
+            .strip_suffix('>')
+            .and_then(|line| line.rsplit_once(" <"))
+        else {
+            continue;
+        };
+
+        // `\>` is an angle bracket the author wrote, not a label.
+        if !name.0.ends_with('\\') {
+            labels.insert(name.1.to_string());
+        }
+    }
+
+    labels
+}
+
 /// Turn a reference to a label that was never emitted back into plain text.
 ///
 /// The HTML back end can point at anything, because a browser simply does
@@ -1303,7 +1338,9 @@ impl Emitter {
 /// links to a label it cannot find, so a cross reference to a section survives
 /// and everything else — a footnote's mark, an anchor on a paragraph — becomes
 /// the words it was written as.
-fn prune_links(markup: &str, labels: &std::collections::HashSet<String>) -> String {
+fn prune_links(markup: &str) -> String {
+    let labels = defined(markup);
+
     let mut out = String::with_capacity(markup.len());
     let mut rest = markup;
 
@@ -1357,6 +1394,25 @@ fn is_diagram(block: &Block<'_>) -> bool {
 #[cfg(not(feature = "mermaid"))]
 fn is_diagram(_block: &Block<'_>) -> bool {
     false
+}
+
+/// A label, written so that Typst attaches it to what comes before it.
+///
+/// The angle form is the one Typst reads as a section's own name, which is
+/// what puts "Section" in front of a reference in a PDF viewer's own display
+/// of the link. An id it cannot read that way keeps its label all the same,
+/// written as a call.
+fn anchor(id: &str) -> String {
+    let readable = !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'));
+
+    if readable {
+        return format!(" <{id}>");
+    }
+
+    format!(" #label({})", string(id))
 }
 
 /// The box an item of a checklist is marked with.
@@ -1668,6 +1724,36 @@ mod tests {
         // so it keeps its number and loses the link.
         assert!(!out.contains("_footnotedef_"), "{out}");
         assert!(out.contains("Why."), "{out}");
+    }
+
+    #[test]
+    fn a_sections_label_belongs_to_its_heading() {
+        // Typst attaches a label to what comes before it, so one written above
+        // a heading names whatever preceded the heading instead.
+        let out = render("= T\n\nProse.\n\n[[here]]\n== Here\n");
+
+        assert!(out.contains("= Here <here>"), "{out}");
+        assert!(!out.contains("#label(\"here\")\n= Here"), "{out}");
+    }
+
+    #[test]
+    fn an_anchored_term_can_be_reached() {
+        let out =
+            render("= T\n\nSee <<block,a block>>.\n\n[glossary]\n[[block]]block:: A shape.\n");
+
+        assert!(out.contains("#box[]#label(\"block\")"), "the anchor: {out}");
+        assert!(
+            out.contains("#link(label(\"block\"))[a block]"),
+            "and the reference to it: {out}"
+        );
+    }
+
+    #[test]
+    fn a_reference_to_nothing_keeps_its_words() {
+        let out = render("= T\n\nSee <<nowhere>>.\n");
+
+        assert!(!out.contains("#link"), "{out}");
+        assert!(out.contains("nowhere"), "{out}");
     }
 
     #[test]

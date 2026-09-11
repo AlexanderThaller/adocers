@@ -114,7 +114,14 @@ fn link(tag: &str, inner: &str) -> String {
         }
 
         Some(href) => format!("#link({})[{inner}]", string(&href)),
-        None => inner.to_string(),
+
+        // An `[[id]]` anchor, which the parser renders as a link with nowhere
+        // to go. A label needs something in front of it to attach to, so it is
+        // given an empty box: no width, and a place in the line.
+        None => match attribute(tag, "id") {
+            Some(id) => format!("#box[]#label({}){inner}", string(&id)),
+            None => inner.to_string(),
+        },
     }
 }
 
@@ -349,6 +356,14 @@ mod tests {
     #[test]
     fn leaves_an_ordinary_superscript_alone() {
         assert_eq!(typst("x<sup>2</sup>"), "x#super[2]");
+    }
+
+    #[test]
+    fn gives_an_anchor_a_label_to_be_found_by() {
+        assert_eq!(
+            typst(r#"<a id="block"></a>block"#),
+            "#box[]#label(\"block\")block"
+        );
     }
 
     #[test]
