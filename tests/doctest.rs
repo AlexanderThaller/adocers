@@ -31,10 +31,7 @@ const KNOWN_FAILURES: &[&str] = &[
     // Deliberate. Asciidoctor hands an equation to the reader as the notation
     // it was written in, wrapped in delimiters for MathJax to find and rewrite.
     // This renderer converts it to `MathML` instead, which the browser draws
-    // itself — so a page carries the equation rather than a typesetter. The
-    // same goes for an equation inside a line of text.
-    "inline_quoted__asciimath",
-    "inline_quoted__latexmath",
+    // itself — so a page carries the equation rather than a typesetter.
     "stem__asciimath",
     "stem__latexmath",
     "stem__with-id-and-role",
@@ -46,6 +43,20 @@ const KNOWN_FAILURES: &[&str] = &[
     "inline_quoted__double-with-role",
     "inline_quoted__single-with-role",
 ];
+
+/// Divergences that exist only because an optional feature is compiled in.
+///
+/// An equation inside a line of text is converted to `MathML` where
+/// Asciidoctor leaves the notation for `MathJax` — but only when this build
+/// can convert one. Without the feature the two agree again, and the list has
+/// to say so, or `known_failures_are_still_failing` reports a fix that is
+/// really a missing feature.
+#[cfg(feature = "math")]
+const FEATURE_FAILURES: &[&str] = &["inline_quoted__asciimath", "inline_quoted__latexmath"];
+
+/// Nothing: this build converts no equations.
+#[cfg(not(feature = "math"))]
+const FEATURE_FAILURES: &[&str] = &[];
 
 /// One example: the AsciiDoc that was written and the markup Asciidoctor makes
 /// of it.
@@ -217,7 +228,11 @@ fn matches_asciidoctor() {
         return;
     };
 
-    let known: BTreeSet<&str> = KNOWN_FAILURES.iter().copied().collect();
+    let known: BTreeSet<&str> = KNOWN_FAILURES
+        .iter()
+        .chain(FEATURE_FAILURES)
+        .copied()
+        .collect();
     let mut failures = String::new();
     let mut count = 0;
 
@@ -248,7 +263,11 @@ fn known_failures_are_still_failing() {
         return;
     };
 
-    let known: BTreeSet<&str> = KNOWN_FAILURES.iter().copied().collect();
+    let known: BTreeSet<&str> = KNOWN_FAILURES
+        .iter()
+        .chain(FEATURE_FAILURES)
+        .copied()
+        .collect();
     let names: BTreeSet<&str> = examples
         .iter()
         .map(|example| example.name.as_str())
