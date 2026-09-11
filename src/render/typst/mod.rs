@@ -1110,6 +1110,16 @@ impl Emitter {
             })
             .collect();
 
+        // A checklist writes a box in place of a bullet, the way the page does.
+        // The set rule is scoped to a block of its own rather than put back
+        // afterwards: Typst's bullet changes with the depth of the list, and
+        // there is no one value to restore.
+        let checklist = list.type_() == ListType::Unordered && list.is_checklist();
+
+        if checklist {
+            self.out.push_str("#[\n#set list(marker: none)\n");
+        }
+
         // A numbered list that is lettered, starts somewhere other than one, or
         // counts down says so once before its items and puts it back after.
         let numbered = list.type_() == ListType::Ordered;
@@ -1172,7 +1182,7 @@ impl Emitter {
             };
 
             let body = self.item(item);
-            let _ = writeln!(self.out, "{bullet} {term}{body}");
+            let _ = writeln!(self.out, "{bullet} {term}{}{body}", box_of(item, checklist));
         }
 
         if start.is_some() {
@@ -1181,6 +1191,10 @@ impl Emitter {
 
         if reversed || marked || pattern.is_some() {
             let _ = writeln!(self.out, "#set enum(numbering: {})", string(ARABIC));
+        }
+
+        if checklist {
+            self.out.push_str("]\n");
         }
 
         self.out.push('\n');
@@ -1343,6 +1357,24 @@ fn is_diagram(block: &Block<'_>) -> bool {
 #[cfg(not(feature = "mermaid"))]
 fn is_diagram(_block: &Block<'_>) -> bool {
     false
+}
+
+/// The box an item of a checklist is marked with.
+///
+/// The characters the page uses, so the two read alike. Only an item that
+/// carries a checkbox gets one: an item written without is an ordinary item
+/// that happens to share the list, and marking it unfinished would say
+/// something its author did not.
+fn box_of(item: &asciidoc_parser::blocks::ListItem<'_>, checklist: bool) -> &'static str {
+    if !checklist {
+        return "";
+    }
+
+    match item.checkbox() {
+        Some(true) => "\u{2713} ",
+        Some(false) => "\u{274f} ",
+        None => "",
+    }
 }
 
 /// The markup the parser renders a callout marker as, up to its number.
