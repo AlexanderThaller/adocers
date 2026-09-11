@@ -277,7 +277,7 @@ grammars out of the binary entirely.
 The title, author and revision are shown as labelled lines:
 
 ```
-Author: Alexander Thaller <claude@thallerware.de>
+Author: Alexander Thaller <alexander@thaller.ws>
 Version: 1.0
 Date: 2026-09-10
 ```

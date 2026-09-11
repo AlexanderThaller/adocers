@@ -35,7 +35,7 @@ itself. This page's own header is
 [source,asciidoc]
 ----
 = adocers Showcase
-Alexander Thaller <claude@thallerware.de>
+Alexander Thaller <alexander@thaller.ws>
 v1.0, 2026-09-10: one page through every feature
 :status: living document
 :page-tags: asciidoc, rendering, showcase
