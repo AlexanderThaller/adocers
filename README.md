@@ -447,7 +447,8 @@ The typesetter is [Typst](https://typst.app), which is written in Rust and
 compiles in beside everything else, so a PDF needs no LaTeX installation, no
 headless browser and nothing fetched. The fonts are the ones Typst embeds, so
 the same document gives the same PDF whatever is installed on the machine. The
-showcase — 14 pages, five diagrams and a figure — takes about 90 ms.
+showcase — 16 pages, five diagrams, a figure and an outline — takes about
+290 ms, against 70 ms for the same document as a page.
 
 This is a second back end rather than a setting on the first (`src/render/typst/`).
 It walks the same block tree and covers the shape of an ordinary document:

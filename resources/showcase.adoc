@@ -923,7 +923,7 @@ adocers -o showcase.pdf showcase.adoc
 The typesetter is https://typst.app[Typst], compiled into this binary, so a PDF
 needs no LaTeX installation, no headless browser and nothing fetched. The fonts
 are the ones Typst carries, so the same document gives the same PDF wherever it
-is run. This page takes about 90 ms.
+is run. This page takes about 290 ms, against 70 ms as HTML.
 
 Almost everything on this page survives the crossing: headings and their
 numbers, lists, tables with their spans and footers, admonitions with their
