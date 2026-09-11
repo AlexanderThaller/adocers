@@ -377,15 +377,21 @@ fn details(document: &Document<'_>) -> String {
         );
     }
 
-    // The remark describes the revision rather than naming part of it, so it
-    // reads as its own sentence rather than as another label.
+    let mut out = out.trim_end().trim_end_matches('\\').to_string();
+
+    // The remark is a sentence about the revision rather than another value
+    // belonging to it, so it is set apart below the labels rather than given
+    // one of its own — italic, as the page sets it, and not in the same face as
+    // the labels or it reads as a label with the value left off.
     if let Some(remark) = attribute(document, "revremark") {
-        let _ = writeln!(out, "{}\\", inline_markup(&remark));
+        let _ = write!(
+            out,
+            "\n#v(0.4em)\n#text(style: \"italic\")[{}]",
+            inline_markup(&remark)
+        );
     }
 
-    // The last line needs no break after it, and a stray one would leave an
-    // empty line under the header.
-    out.trim_end().trim_end_matches('\\').to_string()
+    out
 }
 
 /// Inline content, with any equation in it typeset rather than written out.
@@ -496,10 +502,22 @@ impl Preamble {
         );
 
         if document.doctitle().is_some() {
+            // A title split in two is set in two: the part before the colon
+            // carries the weight and the part after it is lighter, which is how
+            // the page draws the same title.
+            let heading = match (document.header().main_title(), document.subtitle()) {
+                (Some(main), Some(subtitle)) => format!(
+                    "{}: #text(weight: \"regular\", fill: rgb(\"#656d77\"))[{}]",
+                    inline_markup(main),
+                    inline_markup(subtitle)
+                ),
+
+                _ => inline_markup(&title),
+            };
+
             let _ = writeln!(
                 out,
-                "#align(center)[#text(size: 20pt, weight: \"bold\")[{}]]",
-                inline_markup(&title)
+                "#align(center)[#text(size: 20pt, weight: \"bold\")[{heading}]]"
             );
 
             let details = details(document);
