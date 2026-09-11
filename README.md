@@ -325,6 +325,12 @@ colours to the *chrome* — boxes, lines, labels, backgrounds. The *data* colour
 are left alone: the slices of a pie and the branches of a git graph are telling
 the reader something, and are not the page's to recolour.
 
+Those colours are the page's own custom properties rather than copies of them,
+so a diagram follows a change of scheme while the reader is looking at it, with
+nothing running to redraw it. Drawing in the browser needed a script listening
+for that and redrawing the diagram each time, because mermaid baked the theme
+into the SVG it produced.
+
 `--no-mermaid` renders a diagram as the listing block it was written as, which
 is also what happens to a diagram `merman` cannot read — the source of a
 diagram being more use than a gap. `merman` is at `0.8.0-alpha.6` and its
