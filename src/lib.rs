@@ -8,6 +8,7 @@
 pub mod cli;
 pub mod diagnostics;
 pub mod includes;
+pub mod inputs;
 pub mod job;
 pub mod lint;
 pub mod render;
@@ -108,17 +109,21 @@ fn render(args: &RenderArgs) -> Result<ExitCode> {
 
 /// Report every requested document's diagnostics, and fail if there were any
 /// warnings.
+///
+/// A directory among the inputs stands for every AsciiDoc document beneath it,
+/// which is what makes `adocers check .` a whole CI step.
 fn check(args: &CheckArgs) -> Result<ExitCode> {
+    let inputs = inputs::expand(&args.inputs)?;
     let reporter = reporter(&args.common);
     let mut warnings = 0;
 
-    for input in &args.inputs {
+    for input in &inputs {
         warnings += job::check_file(input, &args.common, reporter)?.warnings;
     }
 
     if warnings > 0 {
         if !args.common.quiet {
-            diagnostics::summary(format(&args.common), warnings, args.inputs.len());
+            diagnostics::summary(format(&args.common), warnings, inputs.len());
         }
 
         return Ok(ExitCode::FAILURE);

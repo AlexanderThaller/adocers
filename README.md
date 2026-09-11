@@ -66,6 +66,7 @@ The last seven are shared with `serve` and `check`.
 ## check
 
 ```
+adocers check .
 adocers check docs/*.adoc
 ```
 
@@ -74,6 +75,25 @@ but writes nothing, and exits non-zero if any warning was reported. This is
 `render --deny-warnings` without the rendering, for a pre-commit hook or a CI
 step that only wants to know whether the documents are in order. `-a`,
 `--safe-mode`, `-v`, `-q` and `--color` apply as they do to `render`.
+
+A directory stands for every AsciiDoc document beneath it. It is walked to the
+bottom, and every `.adoc`, `.asciidoc`, `.ad` and `.asc` file found is checked,
+in path order so that two runs report the same thing in the same sequence.
+Nothing is skipped on the way down — a dot-file is a file and `.github/` is a
+directory — because a CI step that quietly passed over half the repository
+would be worse than none. A symlink to a document is that document; a symlink
+to a directory is left alone, which is what keeps a walk out of a loop.
+
+So the whole of a CI step is:
+
+```yaml
+- run: adocers check .
+```
+
+A path that names a file is checked whatever it is called, extension and all,
+since naming one outright is saying you mean it. A directory holding no
+documents is an error rather than a pass, so a check that has stopped looking
+at anything says so instead of going green.
 
 ## serve
 

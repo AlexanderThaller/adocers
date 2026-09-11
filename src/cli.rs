@@ -156,13 +156,19 @@ pub struct RenderArgs {
 
 /// Arguments of the `check` command.
 ///
-/// Each `FILE` is parsed and its diagnostics reported, exactly as `render`
+/// Each `PATH` is parsed and its diagnostics reported, exactly as `render`
 /// would report them, but nothing is written. The run fails if any warning was
 /// reported, which is what makes it useful in a pre-commit hook or a CI step.
 #[derive(Args, Debug)]
 pub struct CheckArgs {
-    /// AsciiDoc files to check.
-    #[arg(value_name = "FILE", required = true)]
+    /// AsciiDoc files to check, or directories to check every document under.
+    ///
+    /// A directory is walked to the bottom, and every `.adoc`, `.asciidoc`,
+    /// `.ad` and `.asc` file under it is checked — hidden files and hidden
+    /// directories included, since a CI step that quietly passed over
+    /// `.github/` would be worse than no CI step. So `adocers check .` is the
+    /// whole of one. A file named outright is checked whatever it is called.
+    #[arg(value_name = "PATH", required = true)]
     pub inputs: Vec<PathBuf>,
 
     /// Options shared with `render`.

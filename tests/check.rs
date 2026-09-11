@@ -16,6 +16,38 @@ fn scratch(name: &str, source: &str) -> PathBuf {
     path
 }
 
+/// Build a scratch tree of its own for the calling test, with `files` written
+/// at the relative paths given, and hand back the directory it all sits in.
+fn tree(name: &str, files: &[(&str, &str)]) -> PathBuf {
+    let root = std::env::temp_dir()
+        .join(format!("adocers-check-{}", std::process::id()))
+        .join(name);
+
+    // A test that ran before could have left something behind that this one
+    // would then find and report on.
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("scratch directory is writable");
+
+    for (path, source) in files {
+        let path = root.join(path);
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("scratch directory is writable");
+        }
+
+        fs::write(&path, source).expect("scratch file is writable");
+    }
+
+    root
+}
+
+/// A document with one warning in it, which `check` reports as
+/// `AttributeSetAfterHeader`.
+const WARNS: &str = "= Title\n\n:axis: spec\n\nBody.\n";
+
+/// A document `check` has nothing to say about.
+const CLEAN: &str = "= Title\n\nBody.\n";
+
 /// Run `adocers check` on `paths` and hand back the exit status and stderr.
 fn check(paths: &[&PathBuf]) -> (bool, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_adocers"))
@@ -130,4 +162,120 @@ fn json_reports_an_error_as_an_object() {
             .as_str()
             .is_some_and(|m| m.contains("reading"))
     );
+}
+
+#[test]
+fn a_directory_stands_for_every_document_under_it() {
+    let root = tree(
+        "nested",
+        &[
+            ("top.adoc", WARNS),
+            ("deep/inner.adoc", WARNS),
+            ("deep/deeper/innermost.asciidoc", WARNS),
+            ("clean.adoc", CLEAN),
+        ],
+    );
+
+    let (ok, stderr) = check(&[&root]);
+
+    assert!(!ok);
+    assert!(stderr.contains("top.adoc"), "{stderr}");
+    assert!(stderr.contains("inner.adoc"), "{stderr}");
+    assert!(stderr.contains("innermost.asciidoc"), "{stderr}");
+    assert!(stderr.contains("3 warning(s) in 4 files"), "{stderr}");
+}
+
+#[test]
+fn a_directory_of_clean_documents_passes_quietly() {
+    let root = tree(
+        "all-clean",
+        &[("top.adoc", CLEAN), ("deep/inner.adoc", CLEAN)],
+    );
+
+    let (ok, stderr) = check(&[&root]);
+
+    assert!(ok, "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn hidden_files_and_hidden_directories_are_checked_too() {
+    let root = tree(
+        "hidden",
+        &[
+            (".hidden.adoc", WARNS),
+            (".github/workflow.adoc", WARNS),
+            ("visible.adoc", CLEAN),
+        ],
+    );
+
+    let (ok, stderr) = check(&[&root]);
+
+    assert!(!ok);
+    assert!(stderr.contains(".hidden.adoc"), "{stderr}");
+    assert!(stderr.contains("workflow.adoc"), "{stderr}");
+    assert!(stderr.contains("2 warning(s) in 3 files"), "{stderr}");
+}
+
+#[test]
+fn only_asciidoc_is_picked_up_out_of_a_directory() {
+    let root = tree(
+        "mixed",
+        &[
+            ("doc.adoc", CLEAN),
+            ("doc.asciidoc", CLEAN),
+            ("doc.ad", CLEAN),
+            ("doc.asc", CLEAN),
+            // Not AsciiDoc by name, and so not read: as a document either
+            // would be one long warning.
+            ("notes.txt", "= Title\n\n:axis: spec\n"),
+            ("picture.png", "\u{fffd}not text at all"),
+        ],
+    );
+
+    let (ok, stderr) = check(&[&root]);
+
+    assert!(ok, "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn a_file_named_outright_is_checked_whatever_it_is_called() {
+    let root = tree("named", &[("notes.txt", WARNS)]);
+    let path = root.join("notes.txt");
+
+    let (ok, stderr) = check(&[&path]);
+
+    assert!(!ok);
+    assert!(stderr.contains("notes.txt"), "{stderr}");
+}
+
+#[test]
+fn a_directory_holding_no_documents_is_an_error() {
+    let root = tree("empty", &[("README.md", "nothing to check here\n")]);
+    let (ok, stderr) = check(&[&root]);
+
+    assert!(!ok);
+    assert!(stderr.contains("no AsciiDoc documents"), "{stderr}");
+}
+
+#[test]
+fn documents_are_reported_in_path_order() {
+    let root = tree(
+        "ordered",
+        &[
+            ("b.adoc", "= B\n\n:b: 1\n"),
+            ("a.adoc", "= A\n\n:a: 1\n"),
+            ("a-dir/c.adoc", "= C\n\n:c: 1\n"),
+        ],
+    );
+
+    let (_, first) = check(&[&root]);
+    let (_, again) = check(&[&root]);
+
+    assert_eq!(first, again);
+
+    let order = |needle: &str| first.find(needle).unwrap_or_else(|| panic!("{first}"));
+    assert!(order("`:c:`") < order("`:a:`"), "{first}");
+    assert!(order("`:a:`") < order("`:b:`"), "{first}");
 }
