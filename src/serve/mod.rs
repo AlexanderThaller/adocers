@@ -65,6 +65,14 @@ use crate::{
 #[cfg(feature = "math")]
 use crate::render::math;
 
+/// Path a load balancer's health check is expected at.
+///
+/// Unprefixed, unlike the server's other endpoints, because this one is aimed
+/// at something that does not know or care what is being served and will only
+/// be configured with the conventional name. It is therefore reserved: a
+/// directory called `healthz` in the served tree is unreachable.
+const HEALTH_PATH: &str = "/healthz";
+
 /// Path prefix reserved for the server's own endpoints.
 ///
 /// It is deliberately unlikely to collide with a real file, because anything
@@ -212,6 +220,10 @@ async fn handle(State(site): State<Arc<Site>>, request: Request) -> Response {
             .await;
     };
 
+    if path == HEALTH_PATH {
+        return site.health().await;
+    }
+
     if let Some(endpoint) = path.strip_prefix(INTERNAL_PREFIX) {
         return site.internal(endpoint, &query).await;
     }
@@ -335,6 +347,34 @@ impl Site {
         }
 
         self.file(&target, raw)
+    }
+
+    /// Answer a health check.
+    ///
+    /// A load balancer is asking one question — should traffic still come here
+    /// — so the answer is the status code and the body is a courtesy to whoever
+    /// opens it by hand.
+    ///
+    /// The one thing that can go wrong without the process noticing is the
+    /// served directory going away: an unmounted volume, or a deployment that
+    /// replaced the tree. After that every request would answer 404 while the
+    /// process itself looked perfectly well, which is exactly the state a
+    /// health check exists to catch. Nothing is parsed or rendered, so the
+    /// check stays cheap enough to run every second.
+    async fn health(&self) -> Response {
+        let readable = tokio::fs::metadata(&self.root)
+            .await
+            .is_ok_and(|metadata| metadata.is_dir());
+
+        let (status, body) = health_answer(readable);
+
+        build(
+            status,
+            "text/plain; charset=utf-8",
+            None,
+            Caching::Never,
+            Body::from(body),
+        )
     }
 
     /// Answer one of the server's own endpoints.
@@ -632,6 +672,22 @@ enum Caching {
     Forever,
 }
 
+/// What a health check is told, given whether the served directory is still
+/// there.
+///
+/// Split out from the check itself so the two answers can be tested without a
+/// server to ask.
+fn health_answer(readable: bool) -> (StatusCode, &'static str) {
+    if readable {
+        (StatusCode::OK, "ok\n")
+    } else {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the served directory is unreadable\n",
+        )
+    }
+}
+
 /// Assemble a response, falling back to a bare status if a header is rejected.
 fn build(
     status: StatusCode,
@@ -759,6 +815,19 @@ mod tests {
         assert_eq!(query_value("generation=7", "generation"), Some("7"));
         assert_eq!(query_value("raw&generation=7", "generation"), Some("7"));
         assert_eq!(query_value("generation=7", "raw"), None);
+    }
+
+    #[test]
+    fn answers_a_health_check_from_the_served_directory() {
+        let (status, body) = health_answer(true);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "ok\n");
+
+        // A directory that has gone away takes the server out of rotation
+        // rather than leaving it to answer 404 to everything.
+        let (status, body) = health_answer(false);
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("unreadable"));
     }
 
     #[test]

@@ -140,6 +140,24 @@ renewing. So a change reaches the browser as soon as the file system reports it,
 with no polling in between, and a page that loses its connection backs off and
 recovers on its own.
 
+### Health checks
+
+`GET /healthz` answers `200 ok` while the server is fit to take traffic, and
+`503` when it is not, which makes it something a load balancer or an orchestrator
+can be pointed at. `HEAD` works too, and the answer is never cached.
+
+The one thing it checks is that the served directory is still there and still a
+directory. That is the failure a doc server can be in without noticing — an
+unmounted volume, or a deployment that moved the tree out from under it — after
+which every request answers 404 while the process itself looks perfectly well.
+Nothing is parsed or rendered, so the check is cheap enough to run every second.
+
+`/healthz` is reserved: a directory of that name in the served tree is not
+reachable. Everything else the server answers for itself lives under
+`/__adocers/`, but a health check is aimed at something that neither knows nor
+cares what is being served, and will only have been configured with the usual
+name.
+
 ### Building without it
 
 `serve` is behind the default-on `serve` feature. `cargo build
