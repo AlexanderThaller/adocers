@@ -976,8 +976,8 @@ adocers serve ./docs             # http://127.0.0.1:8080/
 |`--no-icons`
 |Mark admonitions with their label rather than an icon.
 
-|`--mermaid-url URL` / `--no-mermaid`
-|Draw diagrams from a copy you host, or leave them as listing blocks.
+|`--no-mermaid` / `--no-math`
+|Leave diagrams and equations as the source they were written as.
 
 |`--safe-mode MODE`
 |`unsafe` (default), `safe`, `server` or `secure`.
