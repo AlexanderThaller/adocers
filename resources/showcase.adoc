@@ -590,6 +590,55 @@ sequenceDiagram
     B->>B: location.reload()
 ----
 
+A sequence diagram can also branch and repeat. `loop`, `alt` and `opt` draw the
+frames around the messages they hold, and `+` and `-` on an arrow mark where a
+participant is busy:
+
+[mermaid]
+----
+sequenceDiagram
+    participant R as Reader
+    participant S as adocers serve
+    loop every render
+        R->>+S: GET /guide.adoc
+        alt document parses
+            S-->>R: 200 and the page
+        else it does not
+            S-->>R: 500 and the diagnostic
+        end
+        opt the page has a diagram
+            R->>S: GET the drawing module
+        end
+        S-->>-R: done
+    end
+----
+
+A pie chart needs no arrows at all:
+
+[mermaid]
+----
+pie title What a documentation page is made of
+    "Prose" : 60
+    "Source blocks" : 25
+    "Tables" : 10
+    "Diagrams" : 5
+----
+
+And a git graph draws branches and merges from the commands that made them:
+
+[mermaid]
+----
+gitGraph
+    commit id: "parser"
+    commit id: "back end"
+    branch highlight
+    commit id: "tree-sitter"
+    commit id: "callouts"
+    checkout main
+    merge highlight
+    commit id: "diagrams"
+----
+
 [#tables]
 == Tables
 
