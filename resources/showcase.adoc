@@ -172,12 +172,19 @@ cross reference>>` points at.
 An icon or a mark can sit in a line of text — image:showcase-figure.svg[A
 figure,120,18] — with the same attributes a block image takes.
 
+[[references]]
 === Links, references and footnotes
 
 A bare URL such as https://asciidoc.org becomes a link, and
 https://asciidoc.org[the syntax reference] gives it a label. Cross references
 point at a section by its ID: <<tables>> and <<_admonitions>> both work, the
 first because that section carries an explicit anchor.
+
+Sections are not the only things with addresses. An anchor before a term in a
+list gives that term one, so a word can point at the entry that explains it: a
+<<block,block>> is one thing and a <<fragment>> is another, both of them
+entries in the <<glossary>> at the end of this page. A reference with no text
+of its own takes the term it points at.
 
 Footnotes collect at the foot of the page.footnote:[Like this one. The
 definitions are gathered into a `#footnotes` block, so every reference in the
@@ -291,9 +298,7 @@ Any other style is a name rather than a shape: it becomes a class on the list
 for a stylesheet to find, and the terms are left for that style to set. That is
 how a glossary is written — `[glossary]` on the section, and again on the list
 inside it, which is what marks the entries as glossary entries rather than as an
-ordinary pair of columns. The <<glossary>> at the end of this page is one, and
-its entries can be pointed at by name: a <<block,block>> is one thing and a
-<<fragment>> is another.
+ordinary pair of columns. The <<glossary>> at the end of this page is one.
 
 == Blocks
 
@@ -1033,9 +1038,8 @@ between.
 [glossary]
 == Glossary
 
-An anchor before a term gives it an address, so a word in the text can point at
-the entry that explains it. The section carries one too, which is what
-<<glossary>> in the sentence above pointed at.
+Each term below carries an anchor, and the section carries one of its own; what
+that is for is shown in <<references>>.
 
 [glossary]
 [[block]]block:: A paragraph, a list, a table, a diagram — anything with a shape
