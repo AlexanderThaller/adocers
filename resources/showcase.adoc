@@ -587,6 +587,7 @@ this page has a use for.
 Boxes and arrows, laid out left to right with `LR` or top to bottom with `TB`.
 A label on an arrow is written between the dashes.
 
+.How a document reaches the page
 [mermaid]
 ----
 flowchart LR
@@ -603,6 +604,7 @@ flowchart LR
 Participants across the top, time down the page, and a message for every arrow
 between them.
 
+.A reader, the server and the file system
 [mermaid]
 ----
 sequenceDiagram
@@ -623,6 +625,7 @@ A sequence diagram can also branch and repeat. `loop`, `alt` and `opt` draw the
 frames around the messages they hold, and `+` and `-` on an arrow mark where a
 participant is busy:
 
+.The same exchange, with its branches and its frames
 [mermaid]
 ----
 sequenceDiagram
@@ -646,6 +649,7 @@ sequenceDiagram
 
 A title and a list of labelled numbers. The percentages are worked out for you.
 
+.What a documentation page is made of
 [mermaid]
 ----
 pie title What a documentation page is made of
@@ -659,6 +663,7 @@ pie title What a documentation page is made of
 
 Branches and merges, drawn from the commands that made them.
 
+.A branch, a few commits and a merge
 [mermaid]
 ----
 gitGraph
