@@ -69,3 +69,65 @@ fn every_file_is_checked_even_after_one_fails() {
     assert!(stderr.contains("`:b:`"), "{stderr}");
     assert!(stderr.contains("2 warning(s) in 2 files"), "{stderr}");
 }
+
+#[test]
+fn json_puts_one_object_on_each_line() {
+    let path = scratch("json", "= Title\n\n:axis: spec\n\nBody.\n");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_adocers"))
+        .args(["check", "--message-format", "json"])
+        .arg(&path)
+        .output()
+        .expect("the binary runs");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let lines: Vec<serde_json::Value> = stderr
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap_or_else(|_| panic!("not JSON: {line}")))
+        .collect();
+
+    assert!(!output.status.success());
+    assert_eq!(lines.len(), 2, "{stderr}");
+
+    let diagnostic = &lines[0];
+    assert_eq!(diagnostic["type"], "diagnostic");
+    assert_eq!(diagnostic["severity"], "warning");
+    assert_eq!(diagnostic["code"], "AttributeSetAfterHeader");
+    assert_eq!(diagnostic["line"], 3);
+    assert_eq!(diagnostic["column"], 1);
+    assert!(diagnostic["help"].is_string());
+    assert!(diagnostic["origin"].is_null());
+    assert_eq!(
+        diagnostic["file"].as_str(),
+        Some(path.to_string_lossy().as_ref())
+    );
+
+    assert_eq!(
+        lines[1],
+        serde_json::json!({"type": "summary", "warnings": 1, "files": 1})
+    );
+}
+
+#[test]
+fn json_reports_an_error_as_an_object() {
+    let output = Command::new(env!("CARGO_BIN_EXE_adocers"))
+        .args([
+            "check",
+            "--message-format",
+            "json",
+            "/nonexistent/adocers-check.adoc",
+        ])
+        .output()
+        .expect("the binary runs");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let line: serde_json::Value = serde_json::from_str(stderr.trim()).expect("one JSON object");
+
+    assert!(!output.status.success());
+    assert_eq!(line["type"], "error");
+    assert!(
+        line["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("reading"))
+    );
+}

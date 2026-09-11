@@ -10,6 +10,10 @@
 //! adocers has a few things of its own to say about a document the parser
 //! accepted as written (see [`crate::lint`]); a [`Lint`] is shown the same way
 //! and counted as a warning.
+//!
+//! With [`Format::Json`] in effect, each diagnostic is written as one JSON
+//! object on a line of its own instead, for a tool to read; [`summary`] and
+//! [`error`] write the lines a run ends with in whichever form is in effect.
 
 use std::{
     io::Write,
@@ -61,6 +65,20 @@ pub struct Reporter {
 
     /// Emit nothing at all; counts are still returned.
     pub quiet: bool,
+
+    /// How a diagnostic is written.
+    pub format: Format,
+}
+
+/// How diagnostics are written.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Format {
+    /// Drawn against the source, for a person.
+    #[default]
+    Text,
+
+    /// One JSON object per line, for a tool.
+    Json,
 }
 
 impl Reporter {
@@ -96,9 +114,10 @@ impl Reporter {
             (severity, diagnostic)
         });
 
-        let lints = lint::check(document, base)
-            .into_iter()
-            .map(|lint| (WarningSeverity::Warning, Diagnostic::lint(lint)));
+        let lints = lint::check(document, base).into_iter().map(|lint| {
+            let diagnostic = Diagnostic::lint(document, display_name, lint);
+            (WarningSeverity::Warning, diagnostic)
+        });
 
         for (severity, diagnostic) in warnings.chain(lints) {
             match severity {
@@ -110,12 +129,17 @@ impl Reporter {
                 continue;
             }
 
-            let cache = cache.get_or_insert_with(|| (display_name, Source::from(source_text)));
-            let report = self.build(display_name, source_text, severity, &diagnostic);
             let mut stderr = std::io::stderr().lock();
 
             // A broken pipe on stderr is not worth failing a render over.
-            let _ = report.eprint(&mut *cache);
+            if self.format == Format::Json {
+                let _ = writeln!(stderr, "{}", diagnostic.json(display_name, severity));
+            } else {
+                let cache = cache.get_or_insert_with(|| (display_name, Source::from(source_text)));
+                let report = self.build(display_name, source_text, severity, &diagnostic);
+                let _ = report.eprint(&mut *cache);
+            }
+
             let _ = stderr.flush();
         }
 
@@ -152,8 +176,8 @@ impl Reporter {
             report = report.with_help(help);
         }
 
-        if let Some(note) = &diagnostic.note {
-            report = report.with_note(note);
+        if let Some(origin) = &diagnostic.origin {
+            report = report.with_note(origin.note());
         }
 
         report.finish()
@@ -178,11 +202,47 @@ struct Diagnostic<'src> {
     help: Option<String>,
 
     /// Where the span really came from, when that is not the file shown.
-    note: Option<String>,
+    origin: Option<Origin>,
+}
+
+/// The file and line a span was included from.
+struct Origin {
+    /// The file it came from.
+    file: String,
+
+    /// The line in that file.
+    line: usize,
+
+    /// The column in that file, when the line reached the document as it
+    /// was written and columns still mean the same thing.
+    column: Option<usize>,
+
+    /// Whether the line shown in the document was rewritten during
+    /// preprocessing, so that it no longer reads as the file has it.
+    rewritten: bool,
+}
+
+impl Origin {
+    /// The note a text report carries for this origin.
+    fn note(&self) -> String {
+        let position = match self.column {
+            Some(column) => format!("{}:{}:{column}", self.file, self.line),
+            None => format!("{}:{}", self.file, self.line),
+        };
+
+        if self.rewritten {
+            format!(
+                "included from {position} (the line shown above was rewritten during \
+                 preprocessing)"
+            )
+        } else {
+            format!("included from {position}")
+        }
+    }
 }
 
 impl<'src> Diagnostic<'src> {
-    /// A parser warning, with its origin note if it came from an include.
+    /// A parser warning, with where it was included from if it was.
     fn warning(document: &Document<'_>, display_name: &str, warning: &Warning<'src>) -> Self {
         let message = warning.warning.to_string();
 
@@ -192,20 +252,79 @@ impl<'src> Diagnostic<'src> {
             label: label_for(&message),
             message,
             help: None,
-            note: origin_note(document, warning, display_name),
+            origin: origin_of(document, warning, display_name),
         }
     }
 
-    /// One of adocers' own checks.
-    fn lint(lint: Lint<'src>) -> Self {
+    /// One of adocers' own checks, with where it was included from if it was.
+    fn lint(document: &Document<'_>, display_name: &str, lint: Lint<'src>) -> Self {
         Self {
             source: lint.source,
             code: lint.code.to_string(),
             label: label_for(&lint.message),
             message: lint.message,
             help: Some(lint.help),
-            note: None,
+            origin: origin_in_document(document, lint.source, display_name),
         }
+    }
+
+    /// This diagnostic as one line of JSON.
+    ///
+    /// `line` and `column` index the preprocessed source, as the text report
+    /// does; `origin` names the included file when that is where the line
+    /// came from.
+    fn json(&self, display_name: &str, severity: WarningSeverity) -> serde_json::Value {
+        serde_json::json!({
+            "type": "diagnostic",
+            "severity": match severity {
+                WarningSeverity::Debug => "advice",
+                _ => "warning",
+            },
+            "code": self.code,
+            "message": self.message,
+            "file": display_name,
+            "line": self.source.line(),
+            "column": self.source.col(),
+            "help": self.help,
+            "origin": self.origin.as_ref().map(|origin| serde_json::json!({
+                "file": origin.file,
+                "line": origin.line,
+                "column": origin.column,
+                "rewritten": origin.rewritten,
+            })),
+        })
+    }
+}
+
+/// Write the line a `check` or a `render --deny-warnings` ends with.
+pub fn summary(format: Format, warnings: usize, files: usize) {
+    if format == Format::Json {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "type": "summary",
+                "warnings": warnings,
+                "files": files,
+            })
+        );
+    } else {
+        let noun = if files == 1 { "file" } else { "files" };
+        eprintln!("adocers: {warnings} warning(s) in {files} {noun}");
+    }
+}
+
+/// Write the error a run ended on.
+pub fn error(format: Format, error: &anyhow::Error) {
+    if format == Format::Json {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "type": "error",
+                "message": format!("{error:#}"),
+            })
+        );
+    } else {
+        eprintln!("adocers: {error:#}");
     }
 }
 
@@ -254,36 +373,41 @@ fn label_for(message: &str) -> String {
     }
 }
 
-/// A note naming where a warning really came from, when that is not the primary
-/// file at the position shown.
-fn origin_note(
-    document: &Document<'_>,
-    warning: &Warning<'_>,
-    display_name: &str,
-) -> Option<String> {
+/// Where a warning really came from, when that is not the primary file at the
+/// position shown.
+fn origin_of(document: &Document<'_>, warning: &Warning<'_>, display_name: &str) -> Option<Origin> {
     // A warning from privately-expanded content carries its own pre-resolved
     // origin, because no span in the document maps back to it.
     if let Some(origin) = &warning.origin {
-        let file = origin.0.as_deref().unwrap_or(display_name);
-        return Some(format!("originates in {file}:{}", origin.1));
+        return Some(Origin {
+            file: origin.0.clone().unwrap_or_else(|| display_name.to_string()),
+            line: origin.1,
+            column: None,
+            rewritten: false,
+        });
     }
 
-    let origin = document.origin_of(warning.source);
+    origin_in_document(document, warning.source, display_name)
+}
+
+/// Where a span in the document really came from, when that is not the
+/// primary file at the position shown.
+fn origin_in_document(
+    document: &Document<'_>,
+    span: Span<'_>,
+    display_name: &str,
+) -> Option<Origin> {
+    let origin = document.origin_of(span);
     let file = origin.file?;
 
     if file == display_name {
         return None;
     }
 
-    let position = match origin.col {
-        Some(col) => format!("{file}:{}:{col}", origin.line),
-        None => format!("{file}:{}", origin.line),
-    };
-
-    Some(match origin.fidelity {
-        Fidelity::Verbatim => format!("included from {position}"),
-        _ => format!(
-            "included from {position} (the line shown above was rewritten during preprocessing)"
-        ),
+    Some(Origin {
+        file: file.to_string(),
+        line: origin.line,
+        column: origin.col,
+        rewritten: !matches!(origin.fidelity, Fidelity::Verbatim),
     })
 }

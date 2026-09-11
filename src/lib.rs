@@ -32,9 +32,13 @@ use crate::{
         ColorChoice,
         Command,
         CommonArgs,
+        MessageFormat,
         RenderArgs,
     },
-    diagnostics::Reporter,
+    diagnostics::{
+        Format,
+        Reporter,
+    },
     render::Options,
 };
 
@@ -43,6 +47,15 @@ use crate::{
 /// The exit code is returned rather than taken, so that a caller which is not
 /// a process — a test, or a benchmark — can see what happened.
 pub fn run(cli: Cli) -> ExitCode {
+    let format = format(match &cli.command {
+        None => &cli.render.common,
+        Some(Command::Render(args)) => &args.common,
+        Some(Command::Check(args)) => &args.common,
+
+        #[cfg(feature = "serve")]
+        Some(Command::Serve(args)) => &args.common,
+    });
+
     let result = match cli.command {
         None => render(&cli.render),
         Some(Command::Render(args)) => render(&args),
@@ -56,7 +69,7 @@ pub fn run(cli: Cli) -> ExitCode {
         Ok(code) => code,
 
         Err(error) => {
-            eprintln!("adocers: {error:#}");
+            diagnostics::error(format, &error);
             ExitCode::FAILURE
         }
     }
@@ -81,7 +94,11 @@ fn render(args: &RenderArgs) -> Result<ExitCode> {
     }
 
     if args.deny_warnings && warnings > 0 {
-        eprintln!("adocers: {warnings} warning(s) reported and `--deny-warnings` is in effect");
+        if format(&args.common) == Format::Json {
+            diagnostics::summary(Format::Json, warnings, jobs.len());
+        } else {
+            eprintln!("adocers: {warnings} warning(s) reported and `--deny-warnings` is in effect");
+        }
 
         return Ok(ExitCode::FAILURE);
     }
@@ -101,9 +118,7 @@ fn check(args: &CheckArgs) -> Result<ExitCode> {
 
     if warnings > 0 {
         if !args.common.quiet {
-            let files = args.inputs.len();
-            let noun = if files == 1 { "file" } else { "files" };
-            eprintln!("adocers: {warnings} warning(s) in {files} {noun}");
+            diagnostics::summary(format(&args.common), warnings, args.inputs.len());
         }
 
         return Ok(ExitCode::FAILURE);
@@ -178,5 +193,14 @@ pub fn reporter(common: &CommonArgs) -> Reporter {
 
         verbose: common.verbose,
         quiet: common.quiet,
+        format: format(common),
+    }
+}
+
+/// How this run writes its diagnostics.
+fn format(common: &CommonArgs) -> Format {
+    match common.message_format {
+        MessageFormat::Text => Format::Text,
+        MessageFormat::Json => Format::Json,
     }
 }

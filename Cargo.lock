@@ -39,6 +39,7 @@ dependencies = [
  "merman",
  "mitex",
  "notify-debouncer-full",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tower-http",

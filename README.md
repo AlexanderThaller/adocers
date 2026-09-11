@@ -59,8 +59,9 @@ adocers -o doc.pdf doc.adoc # writes a PDF instead
 | `-v, --verbose` | Also show low-severity (debug) diagnostics. |
 | `-q, --quiet` | Report nothing. |
 | `--color <WHEN>` | `auto` (default), `always` or `never`. |
+| `--message-format <FORMAT>` | `text` (default) draws diagnostics against the source; `json` writes one object per line. |
 
-The last six are shared with `serve` and `check`.
+The last seven are shared with `serve` and `check`.
 
 ## check
 
@@ -270,6 +271,25 @@ Spans are shown against the *preprocessed* source — the document after
 `include::` expansion — which is what the parser measured, so the underline
 always lands on the right bytes. When a warning came from an included file, a
 note names the file and line it really came from.
+
+### As JSON
+
+`--message-format json` writes each diagnostic as one JSON object on a line of
+its own, to standard error, for a tool to read:
+
+```json
+{"type":"diagnostic","severity":"warning","code":"ImageNotFound","message":"image `gone.png` was not found (looked at `docs/gone.png`)","file":"docs/doc.adoc","line":9,"column":8,"help":"the target is relative to the document's directory; check the name, or set `:imagesdir:` if the pictures live somewhere else","origin":null}
+{"type":"summary","warnings":1,"files":1}
+```
+
+`severity` is `warning` or `advice`; `line` and `column` index the
+preprocessed source, as the drawn report does, and `origin` names the included
+file, line and column when that is where the line came from. `help` is present
+on adocers' own checks and `null` on the parser's. The line a `check` or a
+`render --deny-warnings` ends with is a `summary` object, and an error that
+ends a run early is an `error` object with a `message`, so everything on
+standard error can be parsed. `serve` and `--watch` keep their status lines as
+text.
 
 ## Watch mode
 

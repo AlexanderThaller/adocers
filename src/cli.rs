@@ -106,6 +106,14 @@ pub struct CommonArgs {
     /// When to colorize diagnostics.
     #[arg(long, value_enum, default_value_t = ColorChoice::Auto, value_name = "WHEN", global = true)]
     pub color: ColorChoice,
+
+    /// How diagnostics are written: drawn against the source, or as JSON.
+    ///
+    /// `json` writes one object per line to standard error, for a tool to
+    /// read; the summary a run ends with, and an error that ends it early,
+    /// are objects too.
+    #[arg(long, value_enum, default_value_t = MessageFormat::Text, value_name = "FORMAT", global = true)]
+    pub message_format: MessageFormat,
 }
 
 /// Arguments of the `render` command.
@@ -253,6 +261,16 @@ impl From<SafeMode> for asciidoc_parser::SafeMode {
             SafeMode::Secure => Self::Secure,
         }
     }
+}
+
+/// How diagnostics are written.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+#[value(rename_all = "lower")]
+pub enum MessageFormat {
+    /// Drawn against the source, for a person.
+    Text,
+    /// One JSON object per line, for a tool.
+    Json,
 }
 
 /// When to emit ANSI color in diagnostics.
