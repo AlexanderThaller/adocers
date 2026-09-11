@@ -62,14 +62,15 @@ const CAPTURES: &[(&str, &str)] = &[
 /// when the source defeats the parser — in both cases the caller falls back to
 /// plain escaped text, which is what an unhighlighted listing has always been.
 pub fn highlight(language: &str, source: &str) -> Option<String> {
-    let configuration = grammars().get(canonical_name(language).as_str())?;
+    let configuration = grammar(language)?;
 
     let mut highlighter = Highlighter::new();
     let events = highlighter
         .highlight(configuration, source.as_bytes(), None, None, |name| {
             // An injected language — the JavaScript inside an HTML document,
-            // say — is highlighted with its own grammar when one is compiled in.
-            grammars().get(canonical_name(name).as_str())
+            // say — is highlighted with its own grammar when one is compiled in,
+            // and compiles it then rather than before it was known to be needed.
+            grammar(name)
         })
         .ok()?;
 
@@ -245,27 +246,69 @@ fn table() -> [Grammar; 14] {
 /// Preparing one means compiling its highlight queries, which is far too slow
 /// to do per block, and the result is immutable and shareable, so the whole set
 /// is built on first use and then read from by every render.
-fn grammars() -> &'static HashMap<&'static str, HighlightConfiguration> {
-    static GRAMMARS: OnceLock<HashMap<&'static str, HighlightConfiguration>> = OnceLock::new();
+/// One compiled-in grammar, and the configuration built from it once something
+/// asks for that language.
+struct Lazy {
+    /// The name, language and queries, as the table holds them.
+    entry: Grammar,
 
-    GRAMMARS.get_or_init(|| {
-        let names: Vec<&str> = CAPTURES.iter().map(|(name, _)| *name).collect();
+    /// The configuration, or `None` if its queries turned out not to compile.
+    compiled: OnceLock<Option<HighlightConfiguration>>,
+}
 
-        table()
-            .into_iter()
-            .filter_map(|(name, language, highlights, injections, locals)| {
-                // A grammar whose queries do not compile is left out rather
-                // than taking the whole set down with it: every other language
-                // still highlights, and this one falls back to plain text.
+impl Lazy {
+    /// The configuration, compiling the queries if this is the first ask.
+    ///
+    /// A grammar whose queries do not compile yields `None` rather than taking
+    /// the whole set down with it: every other language still highlights, and
+    /// this one falls back to plain text.
+    fn get(&self) -> Option<&HighlightConfiguration> {
+        self.compiled
+            .get_or_init(|| {
+                let (name, language, highlights, injections, locals) = self.entry;
+
                 let mut configuration =
                     HighlightConfiguration::new(language(), name, highlights, injections, locals)
                         .ok()?;
 
+                let names: Vec<&str> = CAPTURES.iter().map(|(name, _)| *name).collect();
                 configuration.configure(&names);
-                Some((name, configuration))
+
+                Some(configuration)
+            })
+            .as_ref()
+    }
+}
+
+/// Every grammar compiled into this binary, by the name it is registered under.
+///
+/// Building this map costs nothing: it holds function pointers and query text,
+/// not compiled queries. Compiling one grammar's queries costs several
+/// milliseconds and there are fourteen of them, so they are compiled one at a
+/// time, when a document turns out to be written in that language. A page with
+/// a single Rust listing used to pay for the other thirteen.
+fn grammars() -> &'static HashMap<&'static str, Lazy> {
+    static GRAMMARS: OnceLock<HashMap<&'static str, Lazy>> = OnceLock::new();
+
+    GRAMMARS.get_or_init(|| {
+        table()
+            .into_iter()
+            .map(|entry| {
+                (
+                    entry.0,
+                    Lazy {
+                        entry,
+                        compiled: OnceLock::new(),
+                    },
+                )
             })
             .collect()
     })
+}
+
+/// The grammar registered for a language name, compiled if it has not been yet.
+fn grammar(language: &str) -> Option<&'static HighlightConfiguration> {
+    grammars().get(canonical_name(language).as_str())?.get()
 }
 
 #[cfg(test)]

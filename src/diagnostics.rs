@@ -65,7 +65,12 @@ impl Reporter {
         // Every span is an offset into this text, so `ariadne` and the parser
         // agree on where a warning lands even after includes were expanded.
         let source_text = document.span().data();
-        let mut cache = (display_name, Source::from(source_text));
+
+        // Built on the first warning that is actually shown, not before.
+        // `Source::from` indexes every line of the document, which is a whole
+        // pass over it, and most renders have nothing to report — or were asked
+        // to be quiet about what they do.
+        let mut cache: Option<(&str, Source<&str>)> = None;
 
         for warning in document.warnings() {
             match warning.severity {
@@ -77,11 +82,12 @@ impl Reporter {
                 continue;
             }
 
+            let cache = cache.get_or_insert_with(|| (display_name, Source::from(source_text)));
             let report = self.build(document, display_name, source_text, warning);
             let mut stderr = std::io::stderr().lock();
 
             // A broken pipe on stderr is not worth failing a render over.
-            let _ = report.eprint(&mut cache);
+            let _ = report.eprint(&mut *cache);
             let _ = stderr.flush();
         }
 
