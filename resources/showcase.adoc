@@ -169,8 +169,9 @@ a third.
 [[an-anchor]]Any paragraph can carry an anchor, which is what `<<an-anchor,a
 cross reference>>` points at.
 
-An icon or a mark can sit in a line of text — image:showcase-figure.svg[A
-figure,120,18] — with the same attributes a block image takes.
+An icon or a mark can sit in a line of text — image:showcase-heart.svg[A
+heart,16,16] — with the same attributes a block image takes, and it is placed
+in the line rather than named, in a PDF as well as on a page.
 
 [[references]]
 === Links, references and footnotes
@@ -876,13 +877,31 @@ Field:Kind:Meaning
 
 == Images and media
 
-An image with a title is captioned and numbered as a figure.
+An image with a title is captioned and numbered as a figure, in the sequence
+the diagrams above share.
 
 .How a document becomes a page
 image::showcase-figure.svg[The pipeline from source to page,660,96]
 
 An image's `link` attribute makes the figure itself a link, and `alt` text is
-derived from the file name when you do not give any.
+derived from the file name when you do not give any. `width` and `height` are
+in pixels, and a picture wider than the column is brought down to fit rather
+than left to run off it.
+
+.A badge, drawn with a gradient, a curve and text
+image::showcase-badge.svg[A badge reading adocers,320,120]
+
+An SVG is placed as itself rather than as a picture of itself, so it is as sharp
+printed as it is on screen. The badge above leans on the parts of the format a
+renderer most often gets wrong — a gradient, a curve, and text that has to find
+a font of its own.
+
+.A heart, at a quarter of the width it was drawn at
+image::showcase-heart.svg[A heart,86,79]
+
+That one is https://commons.wikimedia.org/wiki/File:A_perfect_SVG_heart.svg[a
+Wikimedia Commons file] by `pd4u`, dedicated to the public domain; the other two
+were drawn for this page.
 
 Video and audio have their own macros. They are shown here as source rather
 than rendered, because this repository carries no media file to point them at:

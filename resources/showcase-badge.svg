@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Written for this repository, to give the showcase a picture that leans on the
+  parts of SVG a renderer most often gets wrong: a gradient, a curve, and text
+  that has to find a font of its own.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120"
+     role="img" aria-label="A badge reading adocers, drawn with a gradient and a curve">
+  <defs>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1565a8"/>
+      <stop offset="1" stop-color="#6639ba"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="2" y="2" width="316" height="116" rx="14" fill="url(#sweep)"/>
+
+  <path d="M20 96 C 90 40, 150 112, 300 28" fill="none" stroke="#ffffff"
+        stroke-width="3" stroke-opacity="0.45" stroke-linecap="round"/>
+
+  <text x="160" y="58" text-anchor="middle" fill="#ffffff"
+        font-family="Georgia, 'Times New Roman', serif" font-size="34">adocers</text>
+
+  <text x="160" y="84" text-anchor="middle" fill="#ffffff" fill-opacity="0.8"
+        font-family="Georgia, 'Times New Roman', serif" font-size="14">AsciiDoc, rendered</text>
+</svg>
