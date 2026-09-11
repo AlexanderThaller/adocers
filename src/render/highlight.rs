@@ -68,8 +68,9 @@ pub fn highlight(language: &str, source: &str) -> Option<String> {
     let events = highlighter
         .highlight(configuration, source.as_bytes(), None, None, |name| {
             // An injected language — the JavaScript inside an HTML document,
-            // say — is highlighted with its own grammar when one is compiled in,
-            // and compiles it then rather than before it was known to be needed.
+            // say — is highlighted with its own grammar when one is compiled
+            // in, and compiles it then rather than before it was
+            // known to be needed.
             grammar(name)
         })
         .ok()?;

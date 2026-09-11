@@ -63,9 +63,6 @@ use crate::{
     serve::reload::Reload,
 };
 
-#[cfg(feature = "math")]
-use crate::render::math;
-
 /// Path a load balancer's health check is expected at.
 ///
 /// Unprefixed, unlike the server's other endpoints, because this one is aimed
@@ -82,18 +79,6 @@ const INTERNAL_PREFIX: &str = "/__adocers/";
 
 /// Content type of every page this server generates.
 const HTML: &str = "text/html; charset=utf-8";
-
-/// Endpoint the vendored drawing module is served from.
-///
-/// The name carries mermaid's version, so the response can be cached for as
-/// long as the browser likes: this URL will never hold anything else.
-const VENDORED_ENDPOINT: &str = "vendored";
-
-/// How long the vendored module may be cached for.
-///
-/// A year, which is the conventional way of saying "forever" — and `immutable`
-/// so a reload does not even ask again.
-const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 
 /// Serve a directory until the process is interrupted.
 pub fn run(args: &ServeArgs) -> Result<()> {
@@ -117,15 +102,7 @@ pub fn run(args: &ServeArgs) -> Result<()> {
 
     // A served page reaches the drawing module through this server rather than
     // through the network, so it is pointed at the endpoint below.
-    let mut options = crate::options(&args.common, false)?;
-
-    #[cfg(feature = "math")]
-    if crate::uses_vendored_mathjax(&args.common) {
-        options.math = Some(math::Source::Url(format!(
-            "{INTERNAL_PREFIX}{VENDORED_ENDPOINT}/{}",
-            math::BUNDLE_FILE
-        )));
-    }
+    let options = crate::options(&args.common, false)?;
 
     let site = Arc::new(Site {
         index_files: args.index_files(),
@@ -370,24 +347,11 @@ impl Site {
 
         let (status, body) = health_answer(readable);
 
-        build(
-            status,
-            "text/plain; charset=utf-8",
-            None,
-            Caching::Never,
-            Body::from(body),
-        )
+        build(status, "text/plain; charset=utf-8", None, Body::from(body))
     }
 
     /// Answer one of the server's own endpoints.
     async fn internal(&self, endpoint: &str, query: &str) -> Response {
-        if let Some(file) = endpoint
-            .strip_prefix(VENDORED_ENDPOINT)
-            .and_then(|rest| rest.strip_prefix('/'))
-        {
-            return Self::vendored(file);
-        }
-
         if endpoint != "reload" {
             return self
                 .status_page(StatusCode::NOT_FOUND, "Not found", "No such endpoint.")
@@ -420,42 +384,6 @@ impl Site {
         }
         .send()
         .await
-    }
-
-    /// Serve a module vendored into this binary.
-    ///
-    /// The file name carries the version it holds, so a request for any other
-    /// name is a stale link rather than something to guess at.
-    fn vendored(file: &str) -> Response {
-        // MathJax's loader asks for its AsciiMath processor by a path relative
-        // to the bundle, so that name is served as it comes.
-        // Annotated because a build with no vendored module at all leaves only
-        // the `None` arm, and nothing then says what it is a `None` of.
-        let module: Option<&'static str> = match file {
-            #[cfg(feature = "math")]
-            _ if file == math::BUNDLE_FILE => Some(math::BUNDLE),
-            #[cfg(feature = "math")]
-            _ if file == math::ASCIIMATH_FILE => Some(math::ASCIIMATH),
-            _ => None,
-        };
-
-        let Some(module) = module else {
-            return build(
-                StatusCode::NOT_FOUND,
-                "text/plain; charset=utf-8",
-                None,
-                Caching::Never,
-                Body::from("No such asset."),
-            );
-        };
-
-        build(
-            StatusCode::OK,
-            "text/javascript; charset=utf-8",
-            None,
-            Caching::Forever,
-            Body::from(module),
-        )
     }
 
     /// Answer a request that named a directory.
@@ -624,19 +552,12 @@ impl Answer {
                 status,
                 content_type,
                 body,
-            } => build(
-                status,
-                &content_type,
-                None,
-                Caching::Never,
-                Body::from(body),
-            ),
+            } => build(status, &content_type, None, Body::from(body)),
 
             Self::Redirect { location } => build(
                 StatusCode::MOVED_PERMANENTLY,
                 "text/plain; charset=utf-8",
                 Some(&location),
-                Caching::Never,
                 Body::empty(),
             ),
 
@@ -647,7 +568,6 @@ impl Answer {
                     StatusCode::OK,
                     content_type,
                     None,
-                    Caching::Never,
                     Body::from_stream(ReaderStream::new(file)),
                 ),
 
@@ -655,24 +575,11 @@ impl Answer {
                     StatusCode::NOT_FOUND,
                     "text/plain; charset=utf-8",
                     None,
-                    Caching::Never,
                     Body::from(format!("Cannot open {}: {error}", path.display())),
                 ),
             },
         }
     }
-}
-
-/// How long a response may be reused.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Caching {
-    /// Never. Everything read out of the served directory is being edited, so
-    /// a cached copy is always the wrong answer.
-    Never,
-
-    /// Indefinitely. Only the vendored module qualifies: its name carries the
-    /// version it holds, so that URL can never mean anything else.
-    Forever,
 }
 
 /// What a health check is told, given whether the served directory is still
@@ -692,23 +599,13 @@ fn health_answer(readable: bool) -> (StatusCode, &'static str) {
 }
 
 /// Assemble a response, falling back to a bare status if a header is rejected.
-fn build(
-    status: StatusCode,
-    content_type: &str,
-    location: Option<&str>,
-    caching: Caching,
-    body: Body,
-) -> Response {
+fn build(status: StatusCode, content_type: &str, location: Option<&str>, body: Body) -> Response {
     let mut builder = Response::builder()
         .status(status)
         .header(header::CONTENT_TYPE, content_type)
-        .header(
-            header::CACHE_CONTROL,
-            match caching {
-                Caching::Never => "no-store",
-                Caching::Forever => IMMUTABLE,
-            },
-        );
+        // Nothing this server hands out is worth keeping: every file under the
+        // served directory is one somebody is editing.
+        .header(header::CACHE_CONTROL, "no-store");
 
     if let Some(location) = location {
         builder = builder.header(header::LOCATION, location);

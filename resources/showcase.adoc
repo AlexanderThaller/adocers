@@ -488,31 +488,35 @@ nothing on screen.
 
 === Mathematics
 
-With `:stem:` set, a `[stem]` block is an equation. It is typeset in the browser
-by MathJax, which is vendored and compiled in the way the drawing module is, so
-the page reaches no further than the machine that rendered it.
+With `:stem:` set, a `[stem]` block is an equation. It is converted here, while
+the page is rendered, into MathML — which browsers draw themselves. The page
+carries the equation and loads nothing to show it.
 
 `:stem:` on its own means AsciiMath, which is what this one is written in:
 
 [stem]
 ++++
-sqrt(4) = 2
+a^2 + b^2 = c^2
 ++++
 
 `[latexmath]` and `[asciimath]` say which notation a block is in, whatever
-`:stem:` was set to. The two are delimited differently on the way to the page —
-`\$…\$` for AsciiMath, `\[…\]` for LaTeX — which is how the typesetter knows
-which reading to apply.
+`:stem:` was set to. LaTeX is the better supported of the two here — sums,
+integrals, matrices and limits all come out right, where AsciiMath is handled
+more roughly:
+
+[latexmath]
+++++
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+++++
 
 [latexmath]
 ++++
 C = \alpha + \beta Y^{\gamma} + \epsilon
 ++++
 
-`--no-math` leaves an equation as the notation it was written in, and
-`--mathjax-url` loads MathJax from somewhere else instead. A build without the
-`math` feature has no copy to load and behaves as though `--no-math` were always
-set — which is the whole cost of the feature, 2.2{nbsp}MB of JavaScript.
+`--no-math` leaves an equation as the notation it was written in, which is also
+what happens to one the converter cannot read. A build without the `math`
+feature does the same.
 
 [#_admonitions]
 == Admonitions

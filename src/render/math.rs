@@ -1,176 +1,82 @@
-//! Mathematics, typeset in the browser by `MathJax`.
+//! Mathematics, as `MathML`.
 //!
-//! A stem block reaches the page as the notation the author wrote, wrapped in
-//! the delimiters Asciidoctor uses — `\$…\$` for `AsciiMath`, `\[…\]` for LaTeX
-//! — and `MathJax` turns it into an equation. Nothing is typeset at build time,
-//! for the same reason no diagram is drawn at build time: it would mean a
-//! headless browser in the way of an otherwise self-contained binary. It also
-//! degrades honestly, since a reader with no scripts sees the notation rather
-//! than a gap.
+//! An equation is converted here, while the page is rendered, and reaches the
+//! reader as `MathML` — which every current browser draws itself. A page with
+//! equations on it therefore fetches nothing to show them and runs nothing.
 //!
-//! The module is vendored and compiled in, so a rendered page reaches no
-//! further than the machine that rendered it. `--mathjax-url` overrides that,
-//! and the `math` feature leaves it out of the binary altogether.
+//! What it used to do instead was load `MathJax`, 2.2 MB of JavaScript, and
+//! have it rewrite the equations once that arrived. `MathML` is a few hundred
+//! bytes an equation and needs no fonts, because the browser uses the ones it
+//! already has.
 //!
-//! Each block is converted by hand rather than by letting `MathJax` scan the
-//! page for delimiters. `MathJax`'s scanner reads the backslash in `\$` as an
-//! escape and leaves a stray dollar sign behind; this back end already knows
-//! which elements are equations and which notation each is in, so it says so
-//! outright.
+//! Two notations, because AsciiDoc has two. `[latexmath]` — and `[stem]` under
+//! `:stem: latexmath` — goes through `math_core`, which is thorough: sums,
+//! integrals, matrices and limits all come out right. A plain `:stem:` means
+//! `AsciiMath`, which goes through `asciimath_rs` and is rougher: `sqrt(4)`
+//! keeps the parentheses a reader would expect it to drop. Anything neither can
+//! read is left as the source it was written as, which is more use than a gap.
 
-use crate::render::html::escape_attr;
+use asciimath_rs::format::mathml::ToMathML as _;
+use math_core::{
+    LatexToMathML,
+    MathCoreConfig,
+    MathDisplay,
+};
 
-/// The `MathJax` module, vendored so that a rendered page needs no network.
-///
-/// This is the SVG output build. The CHTML builds fetch web fonts at run time,
-/// which is the one thing vendoring is meant to prevent; the SVG build draws
-/// its own glyphs and needs nothing but the script.
-#[cfg(feature = "math")]
-pub const BUNDLE: &str = include_str!("../../vendor/mathjax/tex-mml-svg.js");
+/// Which notation an equation is written in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Notation {
+    /// What a plain `:stem:` means, and what `[asciimath]` says outright.
+    AsciiMath,
 
-/// The `AsciiMath` input processor, which the main bundle does not include.
-///
-/// `MathJax` 3 ships no combined build with `AsciiMath` in it, and `AsciiMath`
-/// is what a plain `:stem:` means, so it travels as a second file. `MathJax`'s
-/// loader looks for it relative to the main bundle, which is why the two keep
-/// their directory layout wherever they are written or served.
-#[cfg(feature = "math")]
-pub const ASCIIMATH: &str = include_str!("../../vendor/mathjax/input/asciimath.js");
-
-/// Directory a file render puts its assets in, relative to the page.
-pub const ASSET_DIR: &str = "adocers-assets";
-
-/// File name the bundle is written and served under.
-///
-/// The version is part of the name on purpose: the bundle cannot change under
-/// a given name, so it is served with a long lifetime, and a browser holding
-/// the old copy would never look again if an upgrade reused the name.
-#[cfg(feature = "math")]
-pub const BUNDLE_FILE: &str = "mathjax-3.2.2-tex-mml-svg.js";
-
-/// Path the `AsciiMath` processor is written and served under, relative to the
-/// bundle. `MathJax`'s loader builds this path itself; it cannot be renamed.
-#[cfg(feature = "math")]
-pub const ASCIIMATH_FILE: &str = "input/asciimath.js";
-
-/// Where a page written to a file looks for the bundle beside it.
-pub const ASSET_HREF: &str = "adocers-assets/mathjax-3.2.2-tex-mml-svg.js";
-
-/// Where a page gets the typesetting module from.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Source {
-    /// Loaded from a URL. The server points this at its own reserved path and
-    /// a file render at the copy written beside the page; `--mathjax-url`
-    /// points it wherever the author likes.
-    Url(String),
-
-    /// Carried in the page itself, for output with nowhere to put a file
-    /// beside it — a document written to standard output, most of all.
-    ///
-    /// `AsciiMath` is not typeset in this form. Its processor is a second file
-    /// that `MathJax` insists on fetching, and an inlined page has no URL to
-    /// fetch it from, so a page built this way waits forever if it asks. LaTeX
-    /// is in the main bundle and works.
-    Inline,
+    /// What `[latexmath]` says, and what `:stem: latexmath` makes the default.
+    Latex,
 }
 
-/// The script that typesets every equation on the page, preceded by the module
-/// it needs.
-pub fn script(source: &Source) -> String {
-    // The AsciiMath processor is only asked for when there is somewhere to
-    // fetch it from. Asking with no URL leaves MathJax waiting on a load that
-    // never finishes, which would cost the page its LaTeX as well.
-    let (module, load) = match source {
-        Source::Url(url) => (
-            format!("<script src=\"{}\"></script>", escape_attr(url)),
-            "\"input/asciimath\"",
-        ),
+/// Convert one equation to `MathML`, or `None` if it cannot be read.
+///
+/// The result is a complete `<math>` element, laid out as a displayed equation
+/// rather than one sitting in a line of text.
+pub fn mathml(source: &str, notation: Notation) -> Option<String> {
+    let source = source.trim();
 
-        // Without the `math` feature there is no vendored module to inline,
-        // so the page carries the notation and nothing else.
-        #[cfg(feature = "math")]
-        Source::Inline => (
-            format!("<script>{}</script>", escape_closing_tag(BUNDLE)),
-            "",
-        ),
+    if source.is_empty() {
+        return None;
+    }
 
-        #[cfg(not(feature = "math"))]
-        Source::Inline => return String::new(),
-    };
-
-    format!(
-        r#"<script>
-window.MathJax = {{
-  loader: {{ load: [{load}] }},
-  svg: {{ fontCache: "local" }},
-  startup: {{ typeset: false }}
-}};
-</script>
-{module}
-<script>
-(function () {{
-  var MathJax = window.MathJax;
-
-  if (!MathJax || !MathJax.startup) {{
-    // The module did not load. Each equation stays as the notation it was
-    // written in, which is more use to a reader than an empty space.
-    return;
-  }}
-
-  MathJax.startup.promise.then(function () {{
-    // Typesetting by hand skips the pass that installs MathJax's own styles,
-    // and one of the things they hide is the MathML it puts beside every
-    // equation for a screen reader. Without them each equation is shown twice.
-    if (MathJax.svgStylesheet) {{
-      document.head.appendChild(MathJax.svgStylesheet());
-    }}
-
-    var blocks = Array.prototype.slice.call(
-      document.querySelectorAll(".stemblock > .content")
-    );
-
-    return Promise.all(blocks.map(function (block) {{
-      var source = block.textContent.trim();
-
-      // The delimiters say which notation this is. They are the author's, put
-      // there by the renderer, so an equation that carries neither is left
-      // exactly as it was written.
-      var latex = source.slice(0, 2) === "\\[" && source.slice(-2) === "\\]";
-      var ascii = source.slice(0, 2) === "\\$" && source.slice(-2) === "\\$";
-
-      if (!latex && !ascii) {{
-        return null;
-      }}
-
-      if (ascii && !MathJax.asciimath2svgPromise) {{
-        return null;
-      }}
-
-      var body = source.slice(2, -2);
-      var typeset = latex
-        ? MathJax.tex2svgPromise(body, {{ display: true }})
-        : MathJax.asciimath2svgPromise(body, {{ display: true }});
-
-      return typeset.then(function (rendered) {{
-        block.textContent = "";
-        block.appendChild(rendered);
-      }});
-    }}));
-  }});
-}})();
-</script>"#
-    )
+    match notation {
+        Notation::Latex => latex(source),
+        Notation::AsciiMath => ascii(source),
+    }
 }
 
-/// Neutralize any `</script` inside JavaScript that is about to be inlined.
+/// LaTeX, which arrives with its own `<math>` wrapper.
+fn latex(source: &str) -> Option<String> {
+    // The converter carries a macro table, so it is built once and shared.
+    static CONVERTER: std::sync::OnceLock<Option<LatexToMathML>> = std::sync::OnceLock::new();
+
+    let converter = CONVERTER
+        .get_or_init(|| LatexToMathML::new(MathCoreConfig::default()).ok())
+        .as_ref()?;
+
+    converter
+        .convert_with_local_state(source, MathDisplay::Block)
+        .ok()
+        .map(|rendered| rendered.mathml)
+}
+
+/// `AsciiMath`, which yields the contents and needs wrapping.
 ///
-/// An HTML parser ends a `<script>` element at the first `</script`, wherever
-/// it falls — inside a string literal or a regular expression included.
-/// `<\/script` is the same text to a JavaScript parser, which reads `\/` as `/`
-/// in both places, and is no longer a closing tag to an HTML one.
-#[cfg(feature = "math")]
-fn escape_closing_tag(script: &str) -> String {
-    script.replace("</script", "<\\/script")
+/// The parser answers with an expression tree for anything at all, so an empty
+/// rendering is the only sign that it made nothing of the source.
+fn ascii(source: &str) -> Option<String> {
+    let rendered = asciimath_rs::parse(source).to_mathml();
+
+    if rendered.trim().is_empty() {
+        return None;
+    }
+
+    Some(format!("<math display=\"block\">{rendered}</math>"))
 }
 
 #[cfg(test)]
@@ -178,20 +84,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn asks_for_asciimath_only_when_it_can_be_fetched() {
-        let url = script(&Source::Url("/m.js".to_string()));
-        assert!(url.contains("\"input/asciimath\""), "{url}");
+    fn converts_latex() {
+        let out = mathml(r"C = \alpha + \beta Y^{\gamma}", Notation::Latex).expect("converts");
 
-        assert!(
-            !script(&Source::Inline).contains("input/asciimath"),
-            "an inlined page has nowhere to fetch it from"
-        );
+        assert!(out.starts_with("<math"), "{out}");
+        assert!(out.contains("<mi>α</mi>"), "{out}");
     }
 
-    #[cfg(feature = "math")]
     #[test]
-    fn closes_no_script_element_early() {
-        assert!(!script(&Source::Inline).contains("</script>MathJax"));
-        assert!(escape_closing_tag("a</script>b").contains("<\\/script"));
+    fn converts_the_shapes_worth_having() {
+        for source in [
+            r"\sum_{i=1}^{n} i = \frac{n(n+1)}{2}",
+            r"\int_0^x e^{-t^2}\,dt",
+            r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}",
+            r"\lim_{x \to \infty} \frac{1}{x} = 0",
+        ] {
+            assert!(
+                mathml(source, Notation::Latex).is_some(),
+                "should convert: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn converts_asciimath() {
+        let out = mathml("a^2 + b^2 = c^2", Notation::AsciiMath).expect("converts");
+
+        assert!(out.starts_with("<math"), "{out}");
+        assert!(out.contains("<msup>"), "{out}");
+    }
+
+    #[test]
+    fn declines_what_it_cannot_read() {
+        assert!(mathml(r"\frac{", Notation::Latex).is_none());
+        assert!(mathml("   ", Notation::AsciiMath).is_none());
+        assert!(mathml("", Notation::Latex).is_none());
     }
 }

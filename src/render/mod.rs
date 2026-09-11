@@ -42,7 +42,8 @@ mod html;
 mod highlight;
 mod icons;
 mod list;
-pub mod math;
+#[cfg(feature = "math")]
+mod math;
 mod media;
 #[cfg(feature = "mermaid")]
 mod mermaid;
@@ -98,12 +99,9 @@ pub struct Options {
     /// block it was written as.
     pub mermaid: bool,
 
-    /// Where the page gets the typesetting module, or `None` to leave an
-    /// equation as the notation it was written in.
-    ///
-    /// A fragment keeps its equations' markup but never the script, for the
-    /// same reason a fragment keeps its diagrams but not mermaid.
-    pub math: Option<math::Source>,
+    /// Whether an equation is converted to `MathML`, or left as the notation it
+    /// was written in.
+    pub math: bool,
 }
 
 /// What a render produced.
@@ -111,10 +109,6 @@ pub struct Options {
 pub struct Rendered {
     /// The markup.
     pub html: String,
-
-    /// Whether the document turned out to hold an equation, for the same
-    /// reason and with the same consequences as [`diagrams`](Self::diagrams).
-    pub equations: bool,
 }
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
@@ -129,21 +123,19 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         options,
         out: Buffer::new(),
         toc_rendered: false,
-        equations: false,
         #[cfg(feature = "mermaid")]
         drawings: 0,
     };
 
     let body = renderer.body();
-    let equations = renderer.equations;
 
     let html = if options.fragment {
         body
     } else {
-        document_page(document, options, &body, equations)
+        document_page(document, options, &body)
     };
 
-    Rendered { html, equations }
+    Rendered { html }
 }
 
 /// Walks the block tree, appending markup as it goes.
@@ -162,10 +154,6 @@ struct Renderer<'src> {
     /// Asciidoctor renders the macro form at most once; a second `toc::[]` is
     /// ignored rather than duplicating the whole outline.
     toc_rendered: bool,
-
-    /// Whether the document turned out to contain an equation, for the same
-    /// reason: only a page that has one loads the typesetting module.
-    equations: bool,
 
     /// How many diagrams have been drawn, so each can be given a name of its
     /// own. Two elements on a page may not share an id.
@@ -304,8 +292,9 @@ impl Renderer<'_> {
             .iter()
             .enumerate()
             .map(|(index, author)| {
-                // Asciidoctor numbers every author after the first; the first is
-                // plain `author`/`email` so existing stylesheets keep working.
+                // Asciidoctor numbers every author after the first; the first
+                // is plain `author`/`email` so existing
+                // stylesheets keep working.
                 let suffix = if index == 0 {
                     String::new()
                 } else {
@@ -657,12 +646,7 @@ pub fn page(page: &Page<'_>, body: &str) -> String {
 }
 
 /// Wrap a rendered document's body in a page built from its own metadata.
-fn document_page(
-    document: &Document<'_>,
-    options: &Options,
-    body: &str,
-    equations: bool,
-) -> String {
+fn document_page(document: &Document<'_>, options: &Options, body: &str) -> String {
     let lang = match document.attribute_value("lang") {
         InterpretedValue::Value(lang) => lang,
         _ => "en".to_string(),
@@ -679,16 +663,10 @@ fn document_page(
         .doctitle_sanitized()
         .unwrap_or_else(|| "Untitled".to_string());
 
-    // The typesetter is delivered only to a page that has something for it to
-    // do. Diagrams need nothing delivered: they are drawn here.
-    let mut body_suffix = String::new();
-
-    if let Some(source) = options.math.as_ref().filter(|_| equations) {
-        body_suffix.push_str(&math::script(source));
-        body_suffix.push('\n');
-    }
-
-    body_suffix.push_str(&options.body_suffix);
+    // Nothing is delivered to the page any more: diagrams are drawn here and
+    // equations are converted here, so the only thing appended is whatever the
+    // caller asked for.
+    let body_suffix = options.body_suffix.clone();
 
     page(
         &Page {

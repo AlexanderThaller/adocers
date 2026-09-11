@@ -28,6 +28,14 @@ use std::{
 ///
 /// Each entry is `<corpus file>__<example name>`.
 const KNOWN_FAILURES: &[&str] = &[
+    // Deliberate. Asciidoctor hands an equation to the reader as the notation
+    // it was written in, wrapped in delimiters for MathJax to find and rewrite.
+    // This renderer converts it to `MathML` instead, which the browser draws
+    // itself — so a page carries the equation rather than a typesetter.
+    "stem__asciimath",
+    "stem__latexmath",
+    "stem__with-id-and-role",
+    "stem__with-title",
     // Not this crate's to fix: a role on curly-quote quoting — `[why]"`text`"`
     // — should become a `<span>`, but inline content is rendered by
     // `asciidoc-parser` and it returns the text without one. `[.role]#text#`

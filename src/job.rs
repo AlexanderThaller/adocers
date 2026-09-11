@@ -35,7 +35,6 @@ use crate::{
     render::{
         self,
         Options,
-        math,
     },
 };
 
@@ -64,10 +63,6 @@ pub struct Job {
 pub struct Outcome {
     /// The rendered HTML.
     pub html: String,
-
-    /// Whether the document held an equation, and so needs the typesetting
-    /// module to be reachable from the page.
-    pub equations: bool,
 
     /// Diagnostics reported for the document.
     pub counts: Counts,
@@ -162,7 +157,6 @@ pub fn render_file(
 
     Ok(Outcome {
         html: rendered.html,
-        equations: rendered.equations,
         counts,
         dependencies: dependencies.snapshot(),
     })
@@ -175,8 +169,7 @@ pub fn run(
     options: &Options,
     reporter: Reporter,
 ) -> Result<Outcome> {
-    let options = destination_options(options, &job.destination, common);
-    let outcome = render_file(&job.input, common, &options, reporter)?;
+    let outcome = render_file(&job.input, common, options, reporter)?;
     let html = &outcome.html;
 
     match &job.destination {
@@ -195,75 +188,10 @@ pub fn run(
             }
 
             fs::write(path, html).with_context(|| format!("writing `{}`", path.display()))?;
-
-            #[cfg(feature = "math")]
-            if outcome.equations && crate::uses_vendored_mathjax(common) {
-                write_asset(path, math::BUNDLE_FILE, math::BUNDLE)?;
-
-                // MathJax's loader builds this path itself, so the processor
-                // has to keep its `input/` directory beside the bundle.
-                write_asset(path, math::ASCIIMATH_FILE, math::ASCIIMATH)?;
-            }
         }
     }
 
     Ok(outcome)
-}
-
-/// Adjust the render options for where the page is going.
-///
-/// A page written to a file can reach a copy of the drawing module written
-/// beside it, which is what the options already say. A page written to standard
-/// output cannot: there is no directory to put anything in, and the caller is
-/// about to send the markup somewhere this tool knows nothing about. That page
-/// carries the module itself.
-fn destination_options(
-    options: &Options,
-    destination: &Destination,
-    common: &CommonArgs,
-) -> Options {
-    if !matches!(destination, Destination::Stdout) {
-        return options.clone();
-    }
-
-    Options {
-        math: crate::uses_vendored_mathjax(common)
-            .then_some(math::Source::Inline)
-            .or_else(|| options.math.clone()),
-
-        ..options.clone()
-    }
-}
-
-/// Write one vendored module beside a rendered page.
-///
-/// The file name carries the module's version, so several pages in one
-/// directory share one copy and an upgrade lands beside the old one rather than
-/// on top of a copy a browser may still be holding.
-///
-/// `name` may name a subdirectory, which `MathJax`'s loader requires of its
-/// `AsciiMath` processor.
-#[cfg(feature = "math")]
-fn write_asset(page: &Path, name: &str, contents: &str) -> Result<()> {
-    let asset = page
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or(Path::new("."))
-        .join(math::ASSET_DIR)
-        .join(name);
-
-    // A module never changes under a given name, so a second document in the
-    // same directory has nothing to add.
-    if asset.is_file() {
-        return Ok(());
-    }
-
-    if let Some(directory) = asset.parent() {
-        fs::create_dir_all(directory)
-            .with_context(|| format!("creating `{}`", directory.display()))?;
-    }
-
-    fs::write(&asset, contents).with_context(|| format!("writing `{}`", asset.display()))
 }
 
 /// Apply one `-a` argument, in any of the forms the Asciidoctor CLI accepts.

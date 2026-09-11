@@ -33,10 +33,7 @@ use crate::{
         RenderArgs,
     },
     diagnostics::Reporter,
-    render::{
-        Options,
-        math,
-    },
+    render::Options,
 };
 
 /// Run one invocation, having already parsed the command line.
@@ -135,31 +132,13 @@ fn mermaid(common: &CommonArgs) -> bool {
     cfg!(feature = "mermaid") && !common.no_mermaid
 }
 
-/// Where equations are typeset from, or `None` when they are to be left as the
-/// notation they were written in.
+/// Whether an equation is converted to `MathML`.
 ///
-/// The same arrangement as [`mermaid`]: without `--mathjax-url` this names the
-/// vendored copy, and whoever produces the page replaces it with a path its
-/// reader can reach.
-fn math(common: &CommonArgs) -> Option<math::Source> {
-    if common.no_math {
-        return None;
-    }
-
-    match &common.mathjax_url {
-        Some(url) => Some(math::Source::Url(url.clone())),
-
-        // A build without the `math` feature has nothing vendored to point at,
-        // so an equation stays as it was written unless a URL was named.
-        None if cfg!(feature = "math") => Some(math::Source::Url(math::ASSET_HREF.to_string())),
-        None => None,
-    }
-}
-
-/// Whether equations are typeset from the vendored copy rather than a URL the
-/// author named.
-pub fn uses_vendored_mathjax(common: &CommonArgs) -> bool {
-    cfg!(feature = "math") && !common.no_math && common.mathjax_url.is_none()
+/// Conversion happens here, while the page is being built, so there is nothing
+/// for the page to fetch. A build without the `math` feature converts nothing
+/// whatever this says.
+fn math(common: &CommonArgs) -> bool {
+    cfg!(feature = "math") && !common.no_math
 }
 
 /// Configure diagnostic output for this run.

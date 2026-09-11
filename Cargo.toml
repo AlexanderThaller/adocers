@@ -13,9 +13,9 @@ serve = ["dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower-http"]
 # listing block it was written as.
 mermaid = ["dep:merman"]
 
-# MathJax, vendored so a page with equations needs no network. It is 2.2 MB of
-# JavaScript compiled into the binary, which is the whole cost of the feature.
-math = []
+# Equations, converted to MathML for the browser to draw. Without it an
+# equation renders as the notation it was written in.
+math = ["dep:math-core", "dep:asciimath-rs"]
 
 # Syntax highlighting, and the grammars it parses with.
 highlight = [
@@ -41,11 +41,13 @@ tower-http = ["dep:tower-http"]
 anyhow = "1"
 ariadne = "0.6"
 asciidoc-parser = "0.31"
+asciimath-rs = { version = "0.6.2", optional = true }
 axum = { version = "0.8", default-features = false, features = [
   "http1",
   "tokio",
 ], optional = true }
 clap = { version = "4", features = ["derive"] }
+math-core = { version = "0.8.2", optional = true }
 merman = { version = "0.8.0-alpha.6", features = ["svg"], optional = true }
 notify-debouncer-full = "0.7"
 tokio = { version = "1", default-features = false, features = [

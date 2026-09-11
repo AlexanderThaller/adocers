@@ -50,7 +50,6 @@ adocers -o - doc.adoc       # writes to standard output
 | `--no-icons` | Mark admonitions with their label instead of an icon. |
 | `--no-highlight` | Leave source blocks unhighlighted. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
-| `--mathjax-url <URL>` | Load MathJax from this URL instead of the built-in copy. Must be a MathJax 3 build with `input/asciimath.js` beside it. |
 | `--no-math` | Show equations as the notation they were written in. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
 | `-w, --watch` | Re-render on change; see below. |
@@ -342,25 +341,25 @@ diagram renders as its source.
 
 ### Mathematics
 
-A `[stem]`, `[latexmath]` or `[asciimath]` block is an equation, typeset in the
-browser by MathJax on the same terms: vendored into the binary, delivered only
-to a page that has one, and never fetched from the network.
+A `[stem]`, `[latexmath]` or `[asciimath]` block is an equation, converted here
+into MathML — which every current browser draws itself, using fonts it already
+has. A page carries its equations and loads nothing to show them.
 
-MathJax is asked to convert each block by name rather than to scan the page for
-delimiters. Its scanner reads the backslash in Asciidoctor's `\$…\$` as an
-escape and leaves a stray dollar sign behind, and this renderer already knows
-which elements are equations and which notation each is in.
+That replaces MathJax, which was 2.2 MB of JavaScript this tool used to vendor
+and hand to the reader. An equation in MathML is a few hundred bytes.
 
-| Output | Where the page gets MathJax |
-| --- | --- |
-| `serve` | The server's own `/__adocers/vendored/…`, cached indefinitely since the name carries the version. |
-| A file | `adocers-assets/mathjax-<version>-tex-mml-svg.js`, with `input/asciimath.js` beside it. |
-| Standard output | The page carries the module itself — and handles LaTeX only, since AsciiMath's processor is a second file MathJax insists on fetching and an inlined page has no URL to fetch it from. |
+Two notations, because AsciiDoc has two. `[latexmath]`, and `[stem]` under
+`:stem: latexmath`, goes through
+[`math-core`](https://crates.io/crates/math-core), which is thorough — sums,
+integrals, matrices and limits all come out right. A plain `:stem:` means
+AsciiMath, which goes through
+[`asciimath-rs`](https://crates.io/crates/asciimath-rs) and is rougher:
+`sqrt(4)` keeps the parentheses a reader would expect it to drop. Prefer LaTeX
+if you write much of it.
 
-`--mathjax-url` loads from somewhere else instead, and `--no-math` leaves an
-equation as the notation it was written in. The `math` feature is what compiles
-the copy in; a build without it behaves as though `--no-math` were always set,
-and is 2.2 MB of JavaScript lighter.
+`--no-math` leaves an equation as the notation it was written in, which is also
+what happens to one neither converter can read. `math` is a default-on feature;
+without it nothing is converted.
 
 ### Security
 

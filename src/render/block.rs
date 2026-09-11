@@ -180,22 +180,20 @@ impl<'src> Renderer<'src> {
             "literal" => self.literal(block, content),
 
             "stem" => {
-                // MathJax is told where the mathematics starts and stops by
-                // these delimiters; without them the page shows the source.
-                let (open, close) = if self.stem_is_latex(block) {
-                    ("\\[", "\\]")
-                } else {
-                    ("\\$", "\\$")
-                };
+                // The source is escaped for the page; the converter needs it
+                // back as the author wrote it.
+                let source = unescape(content);
 
-                // Only a page with an equation on it loads the typesetting
-                // module, so the page cannot be assembled until this is known.
-                self.equations = true;
+                // An equation the converter cannot read stays as its source,
+                // which is more use to a reader than a gap.
+                let body = self
+                    .equation(&source, block)
+                    .unwrap_or_else(|| content.to_string());
 
                 self.open_wrapper(block, "stemblock");
                 self.block_title(block);
                 self.out.open("div", None, &["content"]);
-                self.out.line(&format!("{open}{content}{close}"));
+                self.out.line(&body);
                 self.out.close("div");
                 self.out.close("div");
             }
@@ -347,12 +345,7 @@ impl<'src> Renderer<'src> {
     fn drawn(&mut self, content: &str) -> Option<String> {
         self.drawings += 1;
 
-        let source = content
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&");
-
-        crate::render::mermaid::svg(&source, &format!("diagram-{}", self.drawings))
+        crate::render::mermaid::svg(&unescape(content), &format!("diagram-{}", self.drawings))
     }
 
     /// Never draws: `merman` is not compiled in.
@@ -365,20 +358,45 @@ impl<'src> Renderer<'src> {
         None
     }
 
-    /// Whether a stem block holds LaTeX rather than `AsciiMath`.
+    /// Convert a stem block to `MathML`, if this build can and it reads.
+    #[cfg(feature = "math")]
+    fn equation(&self, source: &str, block: &'src Block<'src>) -> Option<String> {
+        crate::render::math::mathml(source, self.notation(block))
+    }
+
+    /// Never converts: no converter is compiled in.
+    #[cfg(not(feature = "math"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the other half of this pair reads the document, and both are called the same way"
+    )]
+    fn equation(&self, _source: &str, _block: &'src Block<'src>) -> Option<String> {
+        None
+    }
+
+    /// Which notation a stem block is written in.
     ///
     /// `[latexmath]` and `[asciimath]` say so outright; a plain `[stem]` takes
     /// whatever `:stem:` was set to, which is `AsciiMath` unless it says
     /// otherwise.
-    fn stem_is_latex(&self, block: &'src Block<'src>) -> bool {
+    #[cfg(feature = "math")]
+    fn notation(&self, block: &'src Block<'src>) -> crate::render::math::Notation {
+        use crate::render::math::Notation;
+
         match block.declared_style() {
-            Some("latexmath") => return true,
-            Some("asciimath") => return false,
+            Some("latexmath") => return Notation::Latex,
+            Some("asciimath") => return Notation::AsciiMath,
             _ => {}
         }
 
-        self.attribute("stem")
+        if self
+            .attribute("stem")
             .is_some_and(|stem| stem == "latexmath")
+        {
+            Notation::Latex
+        } else {
+            Notation::AsciiMath
+        }
     }
 
     /// Highlight a listing's source, if this build can and the block asked for
@@ -486,7 +504,8 @@ impl<'src> Renderer<'src> {
         let title = self.linked_title(section, &title);
 
         if level == 0 {
-            // A level-0 heading in the body is not a section wrapper of its own.
+            // A level-0 heading in the body is not a section wrapper of its
+            // own.
             self.out.element("h1", section.id(), &["sect0"], &title);
             self.blocks(section.child_blocks());
             return;
@@ -798,6 +817,18 @@ pub(super) fn section_prefix<'src>(section: &'src SectionBlock<'src>) -> String 
         Some(number) => format!("{number}. "),
         None => String::new(),
     }
+}
+
+/// Turn escaped page text back into the source it was written as.
+///
+/// A converter needs what the author typed, and what reaches here has been
+/// escaped for the page — which is the same thing a browser undoes when it
+/// reads an element's text.
+fn unescape(content: &str) -> String {
+    content
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
 }
 
 /// The `nowrap` class a `<pre>` carries when the block asked for it, ready to
