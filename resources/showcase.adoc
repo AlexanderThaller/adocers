@@ -291,7 +291,9 @@ Any other style is a name rather than a shape: it becomes a class on the list
 for a stylesheet to find, and the terms are left for that style to set. That is
 how a glossary is written — `[glossary]` on the section, and again on the list
 inside it, which is what marks the entries as glossary entries rather than as an
-ordinary pair of columns. The appendix below is one.
+ordinary pair of columns. The <<glossary>> at the end of this page is one, and
+its entries can be pointed at by name: a <<block,block>> is one thing and a
+<<fragment>> is another.
 
 == Blocks
 
@@ -1027,13 +1029,18 @@ the current one; the server does not answer until the two differ. So a change
 reaches the browser as soon as the file system reports it, with no polling in
 between.
 
+[[glossary]]
 [glossary]
 == Glossary
 
+An anchor before a term gives it an address, so a word in the text can point at
+the entry that explains it. The section carries one too, which is what
+<<glossary>> in the sentence above pointed at.
+
 [glossary]
-block:: A paragraph, a list, a table, a diagram — anything with a shape of its
-own. AsciiDoc is made of them.
-fragment:: A rendering of the body alone, with no page around it, for embedding
-in one somebody else wrote.
-oracle:: Asciidoctor, against whose output this renderer's is checked. When the
-two disagree, it is right unless there is a reason in writing.
+[[block]]block:: A paragraph, a list, a table, a diagram — anything with a shape
+of its own. AsciiDoc is made of them.
+[[fragment]]fragment:: A rendering of the body alone, with no page around it,
+for embedding in one somebody else wrote.
+[[oracle]]oracle:: Asciidoctor, against whose output this renderer's is checked.
+When the two disagree, it is right unless there is a reason in writing.
