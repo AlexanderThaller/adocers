@@ -502,23 +502,29 @@ impl Preamble {
         );
 
         if document.doctitle().is_some() {
-            // A title split in two is set in two: the part before the colon
-            // carries the weight and the part after it is lighter, which is how
-            // the page draws the same title.
-            let heading = match (document.header().main_title(), document.subtitle()) {
-                (Some(main), Some(subtitle)) => format!(
-                    "{}: #text(weight: \"regular\", fill: rgb(\"#656d77\"))[{}]",
-                    inline_markup(main),
-                    inline_markup(subtitle)
-                ),
+            // A title split at a colon is set in two, the way a title page is:
+            // the title on its own line and the subtitle beneath it, smaller
+            // and lighter in weight but in the same ink. On the page the two
+            // share a line, because a page has no title page to give them.
+            let (heading, subtitle) = match (document.header().main_title(), document.subtitle()) {
+                (Some(main), Some(subtitle)) => {
+                    (inline_markup(main), Some(inline_markup(subtitle)))
+                }
 
-                _ => inline_markup(&title),
+                _ => (inline_markup(&title), None),
             };
 
             let _ = writeln!(
                 out,
                 "#align(center)[#text(size: 20pt, weight: \"bold\")[{heading}]]"
             );
+
+            if let Some(subtitle) = subtitle {
+                let _ = writeln!(
+                    out,
+                    "#v(-0.6em)\n#align(center)[#text(size: 14pt)[{subtitle}]]"
+                );
+            }
 
             let details = details(document);
 
@@ -527,7 +533,7 @@ impl Preamble {
                 // so the document's own first words are what the eye lands on.
                 let _ = writeln!(
                     out,
-                    "#align(center)[#block(width: 80%)[#set text(size: 9pt, fill: \
+                    "#v(0.4em)\n#align(center)[#block(width: 80%)[#set text(size: 9pt, fill: \
                      rgb(\"#656d77\"))\n#set align(center)\n{details}]]"
                 );
             }
