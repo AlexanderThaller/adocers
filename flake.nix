@@ -1,10 +1,21 @@
 {
   description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+    }:
     let
       inherit (nixpkgs) lib;
 
@@ -16,6 +27,24 @@
       ];
 
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+
+      # The toolchain comes from `rust-overlay`, pinned by this flake's lock,
+      # rather than from whatever nixpkgs the caller brought. Two dependencies
+      # want rustc 1.96 and a release branch is easily behind that — 26.05
+      # carries 1.95 — which is no reason to make the caller find a newer
+      # nixpkgs. `mkRustBin` builds the toolchain set without pushing an
+      # overlay onto the caller's package set.
+      rustBinFor = pkgs: rust-overlay.lib.mkRustBin { } pkgs;
+
+      rustPlatformFor =
+        pkgs:
+        let
+          toolchain = (rustBinFor pkgs).stable.latest.minimal;
+        in
+        pkgs.makeRustPlatform {
+          cargo = toolchain;
+          rustc = toolchain;
+        };
 
       # The build reads the version from the manifest, so a release only has to
       # be cut in one place.
@@ -82,10 +111,12 @@
         };
     in
     {
-      overlays.default = final: _prev: { adocers = final.callPackage adocersPackage { }; };
+      overlays.default = final: _prev: {
+        adocers = final.callPackage adocersPackage { rustPlatform = rustPlatformFor final; };
+      };
 
       packages = forAllSystems (pkgs: rec {
-        adocers = pkgs.callPackage adocersPackage { };
+        adocers = pkgs.callPackage adocersPackage { rustPlatform = rustPlatformFor pkgs; };
         default = adocers;
       });
 
@@ -98,24 +129,40 @@
         default = adocers;
       });
 
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.clippy
-            pkgs.rust-analyzer
-            # `.rustfmt.toml` asks for options rustfmt only accepts on
-            # nightly; `asNightly` is the same rustfmt told to accept them.
-            (pkgs.rustfmt.override { asNightly = true; })
-            # `resources/` holds two submodules the doctest suite and the
-            # benchmarks read.
-            pkgs.git
-          ];
+      devShells = forAllSystems (
+        pkgs:
+        let
+          rustBin = rustBinFor pkgs;
+        in
+        {
+          default = pkgs.mkShell {
+            packages = [
+              # The toolchain the package is built with, plus what it takes to
+              # work on it. `rust-src` is here so `rust-analyzer` can follow a
+              # jump into the standard library.
+              (rustBin.stable.latest.minimal.override {
+                extensions = [
+                  "clippy"
+                  "rust-analyzer"
+                  "rust-src"
+                ];
+              })
 
-          env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
-        };
-      });
+              # `.rustfmt.toml` asks for options only a nightly rustfmt
+              # accepts. It is a separate toolchain so that nothing else here
+              # is nightly — `minimal` without `rustfmt` above keeps the two
+              # from both putting a `rustfmt` on PATH.
+              (rustBin.selectLatestNightlyWith (
+                toolchain: toolchain.minimal.override { extensions = [ "rustfmt" ]; }
+              ))
+
+              # `resources/` holds two submodules the doctest suite and the
+              # benchmarks read.
+              pkgs.git
+            ];
+          };
+        }
+      );
 
       checks = forAllSystems (pkgs: {
         inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) adocers;
