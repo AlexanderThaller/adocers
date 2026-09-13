@@ -3,3 +3,7 @@
 # The showcase is a source document; its rendering is not checked in.
 /resources/*.html
 /resources/adocers-assets/
+
+# `nix build` leaves its output symlink here.
+/result
+/result-*

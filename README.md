@@ -9,6 +9,46 @@ Diagnostics are drawn against the source with
 [`axum`](https://github.com/tokio-rs/axum), and PDFs are typeset by
 [Typst](https://typst.app).
 
+## Install
+
+With Cargo:
+
+```
+cargo install --path .
+```
+
+With Nix — `flake.nix` builds the same binary, with no toolchain to install
+first:
+
+```
+nix run github:AlexanderThaller/adocers -- doc.adoc
+nix profile install github:AlexanderThaller/adocers
+```
+
+On NixOS, take the flake as an input and let the overlay put `adocers` in
+`pkgs`:
+
+```nix
+{
+  inputs.adocers.url = "github:AlexanderThaller/adocers";
+
+  outputs = { nixpkgs, adocers, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        { nixpkgs.overlays = [ adocers.overlays.default ]; }
+        ({ pkgs, ... }: { environment.systemPackages = [ pkgs.adocers ]; })
+      ];
+    };
+  };
+}
+```
+
+`adocers.packages.${system}.default` is the same package without the overlay.
+
+`nix develop` opens a shell with the toolchain this repository is built and
+linted with — including a `rustfmt` that accepts the nightly options
+`.rustfmt.toml` asks for.
+
 ## Usage
 
 ```
