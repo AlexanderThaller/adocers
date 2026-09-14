@@ -115,6 +115,7 @@ pub fn run(args: &ServeArgs) -> Result<()> {
         index_files: args.index_files(),
         listing: !args.no_listing,
         hidden: args.hidden,
+        deny_hidden: args.deny_hidden,
         common: args.common.clone(),
         options,
         reporter: crate::reporter(&args.common),
@@ -286,6 +287,9 @@ struct Site {
 
     /// Whether a listing shows entries whose name begins with a dot.
     hidden: bool,
+
+    /// Whether a request that names anything hidden is refused outright.
+    deny_hidden: bool,
 
     /// Parser settings shared with the `render` command.
     common: CommonArgs,
@@ -579,7 +583,18 @@ impl Site {
     ///
     /// Returns `None` for anything that does not resolve to a path under the
     /// root, whether it climbed out with `..` or followed a symlink out.
+    ///
+    /// Every way of naming a file arrives here — the path as it was written,
+    /// the document looked for behind a `.html` page, `?raw` and `?format=pdf`
+    /// alike — which is what makes it the one place `--deny-hidden` has to be
+    /// enforced. The segments walked are those of the request, not of the root,
+    /// so serving a directory that is itself hidden still works: what the flag
+    /// withholds is what a request can reach into, not where the tree sits.
     fn resolve(&self, path: &str) -> Option<PathBuf> {
+        if self.deny_hidden && is_hidden(path) {
+            return None;
+        }
+
         let mut resolved = self.root.clone();
 
         for segment in path.split('/') {
@@ -815,6 +830,20 @@ fn bind_address(bind: &str) -> String {
     bind.to_string()
 }
 
+/// Whether a request path names anything hidden.
+///
+/// True for a dotted name anywhere along it, so a file asked for outright and a
+/// file reached through a hidden directory are the same answer — `/.env` and
+/// `/.git/config` both, which is what makes the flag worth having rather than a
+/// way to hide one level and leak the next.
+///
+/// `.` and `..` are traversal rather than names, and are not hidden; `resolve`
+/// deals with them on its own terms.
+fn is_hidden(path: &str) -> bool {
+    path.split('/')
+        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
+}
+
 /// The documents a request for a page could have been rendered from, in the
 /// order they should be tried.
 ///
@@ -880,6 +909,28 @@ mod tests {
 
         assert_eq!(root, Path::new("/"));
         assert_eq!(index, Some(PathBuf::from("/guide.adoc")));
+    }
+
+    #[test]
+    fn finds_a_hidden_name_anywhere_along_a_path() {
+        for path in [
+            "/.env",
+            "/.git/config",
+            "/docs/.secrets/key",
+            "/docs/.hidden.adoc",
+            "/.github/workflows/ci.yml",
+        ] {
+            assert!(is_hidden(path), "{path} names something hidden");
+        }
+    }
+
+    #[test]
+    fn leaves_ordinary_paths_alone() {
+        // `.` and `..` are traversal, not hidden names, and a dot inside a
+        // name is just a dot — only a leading one hides anything.
+        for path in ["/", "/guide.adoc", "/docs/guide.adoc", "/./a", "/../a", "/a..b"] {
+            assert!(!is_hidden(path), "{path} names nothing hidden");
+        }
     }
 
     #[test]

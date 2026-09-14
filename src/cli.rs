@@ -229,6 +229,16 @@ pub struct ServeArgs {
     #[arg(long = "hidden", conflicts_with = "no_listing")]
     pub hidden: bool,
 
+    /// Refuse to serve anything hidden, rather than only leaving it unlisted.
+    ///
+    /// A name beginning with a dot is answered with a 404 whether it was asked
+    /// for outright or reached through a hidden directory, so `.git/config` and
+    /// a stray `.env` stay in the tree without being readable over HTTP. A
+    /// document named on the command line, and an `--index-file`, are still
+    /// served: naming one outright is saying you mean it.
+    #[arg(long = "deny-hidden", conflicts_with = "hidden")]
+    pub deny_hidden: bool,
+
     /// Do not reload pages in the browser when their sources change.
     #[arg(long = "no-reload")]
     pub no_reload: bool,

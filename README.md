@@ -166,6 +166,7 @@ second Ctrl+C quits at once without waiting for it.
 | `--no-index-file` | Never stand a document in for a directory; go straight to the listing. |
 | `--no-listing` | Do not offer a browsable listing. A directory with no index document is then a 404. |
 | `--hidden` | List names beginning with a dot as well. They are served either way if asked for by name. |
+| `--deny-hidden` | Refuse to serve anything whose path holds a name beginning with a dot. Conflicts with `--hidden`. |
 | `--no-reload` | Do not reload pages when their sources change, and stop watching the directory. |
 
 A named document answers the served directory ahead of any `INDEX.adoc` beside
@@ -176,6 +177,16 @@ in it, and otherwise with a listing of its contents — every entry linked, and
 every ancestor linked in the heading. Names beginning with a dot are left out of
 the listing unless `--hidden` is passed; they are still served if asked for by
 name, whichever way that goes.
+
+`--deny-hidden` withholds them instead of merely leaving them unlisted: a path
+holding a dotted name anywhere along it is a 404, so `/.env` and `/.git/config`
+are both refused rather than one being hidden and the next leaking. The refusal
+covers every form of a request — `?raw` and `?format=pdf` as much as the page,
+and the `.adoc` looked for behind a `.html` — and it is a 404 rather than a 403,
+which would confirm what is there. What the flag withholds is what a request can
+reach into, not where the tree sits: serving a directory that is itself hidden
+works as it always did. A document named on the command line and an
+`--index-file` are served too, since naming one outright is saying you mean it.
 
 `.adoc`, `.asciidoc`, `.ad` and `.asc` are rendered. Everything else — images,
 stylesheets, fonts, PDFs — is served as it is, with a content type guessed from
