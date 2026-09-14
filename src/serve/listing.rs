@@ -34,14 +34,17 @@ struct Entry {
 /// Build the listing page for `directory`, served at `url_path`.
 ///
 /// `url_path` is the request path with its trailing slash, so that links are
-/// relative to it and the breadcrumb can be built from its segments.
+/// relative to it and the breadcrumb can be built from its segments. `hidden`
+/// says whether entries whose name begins with a dot are listed.
 pub fn page(
     directory: &Path,
     url_path: &str,
+    hidden: bool,
     stylesheet: Option<&str>,
     body_suffix: &str,
 ) -> Result<String> {
-    let entries = read(directory).with_context(|| format!("listing `{}`", directory.display()))?;
+    let entries =
+        read(directory, hidden).with_context(|| format!("listing `{}`", directory.display()))?;
 
     let title = format!("Index of {url_path}");
     let mut body = String::new();
@@ -92,17 +95,18 @@ pub fn page(
 
 /// Read a directory into a sorted list of entries.
 ///
-/// Entries whose name begins with a dot are left out: a documentation tree
-/// usually sits next to `.git` and friends, and a listing full of them is
-/// harder to navigate. Such a file is still served if it is asked for by name.
-fn read(directory: &Path) -> Result<Vec<Entry>> {
+/// Unless `hidden` is set, entries whose name begins with a dot are left out: a
+/// documentation tree usually sits next to `.git` and friends, and a listing
+/// full of them is harder to navigate. Such a file is still served if it is
+/// asked for by name, whichever way this goes.
+fn read(directory: &Path, hidden: bool) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
 
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
 
-        if name.starts_with('.') {
+        if !hidden && name.starts_with('.') {
             continue;
         }
 
@@ -149,4 +153,55 @@ fn breadcrumb(url_path: &str) -> String {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a scratch tree of its own for the calling test, holding a hidden
+    /// file, a hidden directory, and a plain one of each.
+    fn tree(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir()
+            .join(format!("adocers-listing-{}", std::process::id()))
+            .join(name);
+
+        // A test that ran before could have left something behind that this one
+        // would then list.
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join(".github")).expect("scratch directory is writable");
+        fs::create_dir_all(root.join("guide")).expect("scratch directory is writable");
+        fs::write(root.join(".hidden.adoc"), "").expect("scratch file is writable");
+        fs::write(root.join("README.adoc"), "").expect("scratch file is writable");
+
+        root
+    }
+
+    fn names(directory: &Path, hidden: bool) -> Vec<String> {
+        let mut names: Vec<String> = read(directory, hidden)
+            .expect("the scratch directory is readable")
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn leaves_hidden_entries_out_by_default() {
+        let root = tree("default");
+
+        assert_eq!(names(&root, false), ["README.adoc", "guide"]);
+    }
+
+    #[test]
+    fn lists_hidden_entries_when_asked_to() {
+        let root = tree("hidden");
+
+        assert_eq!(
+            names(&root, true),
+            [".github", ".hidden.adoc", "README.adoc", "guide"]
+        );
+    }
 }

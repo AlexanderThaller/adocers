@@ -114,6 +114,7 @@ pub fn run(args: &ServeArgs) -> Result<()> {
         index,
         index_files: args.index_files(),
         listing: !args.no_listing,
+        hidden: args.hidden,
         common: args.common.clone(),
         options,
         reporter: crate::reporter(&args.common),
@@ -282,6 +283,9 @@ struct Site {
 
     /// Whether a directory without an index document may be browsed.
     listing: bool,
+
+    /// Whether a listing shows entries whose name begins with a dot.
+    hidden: bool,
 
     /// Parser settings shared with the `render` command.
     common: CommonArgs,
@@ -489,6 +493,7 @@ impl Site {
         match listing::page(
             target,
             path,
+            self.hidden,
             self.options.stylesheet.as_deref(),
             &self.body_suffix(),
         ) {

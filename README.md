@@ -165,6 +165,7 @@ second Ctrl+C quits at once without waiting for it.
 | `--index-file <NAME>` | Document rendered in place of a directory, tried in order. Repeatable, and *replaces* the defaults (`INDEX.adoc`, then `README.adoc`) rather than adding to them. |
 | `--no-index-file` | Never stand a document in for a directory; go straight to the listing. |
 | `--no-listing` | Do not offer a browsable listing. A directory with no index document is then a 404. |
+| `--hidden` | List names beginning with a dot as well. They are served either way if asked for by name. |
 | `--no-reload` | Do not reload pages when their sources change, and stop watching the directory. |
 
 A named document answers the served directory ahead of any `INDEX.adoc` beside
@@ -173,7 +174,8 @@ it: naming one outright is saying you mean it.
 A request for a directory is answered with the first `--index-file` that exists
 in it, and otherwise with a listing of its contents — every entry linked, and
 every ancestor linked in the heading. Names beginning with a dot are left out of
-the listing; they are still served if asked for by name.
+the listing unless `--hidden` is passed; they are still served if asked for by
+name, whichever way that goes.
 
 `.adoc`, `.asciidoc`, `.ad` and `.asc` are rendered. Everything else — images,
 stylesheets, fonts, PDFs — is served as it is, with a content type guessed from

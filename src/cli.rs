@@ -187,6 +187,10 @@ pub struct CheckArgs {
 /// answers `/` with that document, so that what it includes and what it points
 /// at are there beside it.
 #[cfg(feature = "serve")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these are command line flags, and one field per flag is what clap asks for"
+)]
 #[derive(Args, Debug)]
 pub struct ServeArgs {
     /// Directory to serve, or a document to open at `/`.
@@ -215,6 +219,15 @@ pub struct ServeArgs {
     /// Do not show a browsable listing of a directory's contents.
     #[arg(long = "no-listing")]
     pub no_listing: bool,
+
+    /// Show hidden files and directories in the listing.
+    ///
+    /// Names beginning with a dot are left out of a listing by default, since a
+    /// documentation tree usually sits next to `.git` and friends. They are
+    /// served either way if they are asked for by name; this only decides
+    /// whether the listing links them.
+    #[arg(long = "hidden", conflicts_with = "no_listing")]
+    pub hidden: bool,
 
     /// Do not reload pages in the browser when their sources change.
     #[arg(long = "no-reload")]
