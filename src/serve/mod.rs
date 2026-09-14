@@ -86,16 +86,16 @@ const HTML: &str = "text/html; charset=utf-8";
 /// Content type of a typeset document.
 const PDF: &str = "application/pdf";
 
-/// Serve a directory until the process is interrupted.
+/// Serve a directory, or a single document, until the process is interrupted.
 pub fn run(args: &ServeArgs) -> Result<()> {
-    let root = args
+    let target = args
         .root
         .canonicalize()
         .with_context(|| format!("opening `{}`", args.root.display()))?;
 
-    if !root.is_dir() {
-        bail!("`{}` is not a directory", args.root.display());
-    }
+    let Some((root, index)) = served(&target, target.is_dir()) else {
+        bail!("`{}` has no directory to serve", args.root.display());
+    };
 
     // The watch guard is held here rather than in `Site`: it lives exactly as
     // long as the server, while `Site` is shared into every request.
@@ -111,6 +111,7 @@ pub fn run(args: &ServeArgs) -> Result<()> {
     let options = crate::options(&args.common, false)?;
 
     let site = Arc::new(Site {
+        index,
         index_files: args.index_files(),
         listing: !args.no_listing,
         common: args.common.clone(),
@@ -143,7 +144,7 @@ async fn listen(site: Arc<Site>, address: &str) -> Result<()> {
 
     eprintln!(
         "adocers: serving {} at http://{bound}/",
-        site.root.display()
+        site.index.as_deref().unwrap_or(&site.root).display()
     );
 
     if site.reload.is_none() {
@@ -272,6 +273,10 @@ struct Site {
     /// The served directory, canonicalized so that escapes can be detected.
     root: PathBuf,
 
+    /// The document that answers the served directory, when `serve` was
+    /// pointed at a file rather than at a directory.
+    index: Option<PathBuf>,
+
     /// Documents tried for a directory, in order; empty when disabled.
     index_files: Vec<String>,
 
@@ -389,16 +394,24 @@ impl Site {
     /// — so the answer is the status code and the body is a courtesy to whoever
     /// opens it by hand.
     ///
-    /// The one thing that can go wrong without the process noticing is the
-    /// served directory going away: an unmounted volume, or a deployment that
+    /// The one thing that can go wrong without the process noticing is what is
+    /// being served going away: an unmounted volume, or a deployment that
     /// replaced the tree. After that every request would answer 404 while the
     /// process itself looked perfectly well, which is exactly the state a
-    /// health check exists to catch. Nothing is parsed or rendered, so the
-    /// check stays cheap enough to run every second.
+    /// health check exists to catch. A single document is watched in place of
+    /// the directory when `serve` was pointed at one, since it is the whole of
+    /// what this server has to answer with. Nothing is parsed or rendered, so
+    /// the check stays cheap enough to run every second.
     async fn health(&self) -> Response {
-        let readable = tokio::fs::metadata(&self.root)
-            .await
-            .is_ok_and(|metadata| metadata.is_dir());
+        let readable = match &self.index {
+            Some(index) => tokio::fs::metadata(index)
+                .await
+                .is_ok_and(|metadata| metadata.is_file()),
+
+            None => tokio::fs::metadata(&self.root)
+                .await
+                .is_ok_and(|metadata| metadata.is_dir()),
+        };
 
         let (status, body) = health_answer(readable);
 
@@ -447,6 +460,16 @@ impl Site {
     /// for in the same forms as any other page. A listing has no document
     /// behind it, so it is always a page.
     fn directory(&self, target: &Path, path: &str, wanted: Wanted) -> Answer {
+        // A document named on the command line answers ahead of any
+        // `INDEX.adoc` beside it, because naming one outright is saying you
+        // mean it. Only for the served directory itself: the name was about
+        // that one document, not about what every directory holds.
+        if let Some(index) = &self.index
+            && target == self.root
+        {
+            return self.file(index, wanted);
+        }
+
         for name in &self.index_files {
             let candidate = target.join(name);
 
@@ -686,7 +709,7 @@ fn health_answer(readable: bool) -> (StatusCode, &'static str) {
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
-            "the served directory is unreadable\n",
+            "what is served is unreadable\n",
         )
     }
 }
@@ -803,9 +826,56 @@ fn document_candidates(path: &str) -> Vec<String> {
         .collect()
 }
 
+/// The directory to answer from, and the document that answers that directory.
+///
+/// A file is served as the directory around it rather than on its own, because
+/// a document is rarely the whole of what a page needs: an `include::`, an
+/// image beside it, a stylesheet. Serving only the file would hand over a page
+/// whose own references 404. The file still answers `/`, so what was named is
+/// what opens.
+///
+/// `None` when the path has no parent to serve, which a canonical path only is
+/// when it is the filesystem root — and that is a directory, so it does not
+/// reach here.
+fn served(target: &Path, is_dir: bool) -> Option<(PathBuf, Option<PathBuf>)> {
+    if is_dir {
+        return Some((target.to_path_buf(), None));
+    }
+
+    let parent = target.parent()?;
+
+    Some((parent.to_path_buf(), Some(target.to_path_buf())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serves_a_directory_as_itself() {
+        let (root, index) = served(Path::new("/srv/docs"), true).unwrap();
+
+        assert_eq!(root, Path::new("/srv/docs"));
+        assert_eq!(index, None, "a directory is answered by its index files");
+    }
+
+    #[test]
+    fn serves_a_file_as_the_directory_around_it() {
+        // The directory comes along so that an `include::` and an image beside
+        // the document still resolve; the document is what `/` answers with.
+        let (root, index) = served(Path::new("/srv/docs/guide.adoc"), false).unwrap();
+
+        assert_eq!(root, Path::new("/srv/docs"));
+        assert_eq!(index, Some(PathBuf::from("/srv/docs/guide.adoc")));
+    }
+
+    #[test]
+    fn serves_a_file_in_the_filesystem_root() {
+        let (root, index) = served(Path::new("/guide.adoc"), false).unwrap();
+
+        assert_eq!(root, Path::new("/"));
+        assert_eq!(index, Some(PathBuf::from("/guide.adoc")));
+    }
 
     #[test]
     fn looks_for_the_document_behind_a_page() {

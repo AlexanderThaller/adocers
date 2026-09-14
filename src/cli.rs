@@ -35,7 +35,8 @@ pub enum Command {
     /// Report what is wrong with documents, without rendering them.
     Check(CheckArgs),
 
-    /// Serve a directory over HTTP, rendering documents as they are requested.
+    /// Serve a directory, or a single document, over HTTP, rendering documents
+    /// as they are requested.
     #[cfg(feature = "serve")]
     Serve(ServeArgs),
 }
@@ -181,11 +182,15 @@ pub struct CheckArgs {
 /// Documents are rendered when they are requested, so there is nothing to build
 /// first and nothing left behind. Pages reload themselves when anything under
 /// the served directory changes.
+///
+/// Naming a document rather than a directory serves the directory around it and
+/// answers `/` with that document, so that what it includes and what it points
+/// at are there beside it.
 #[cfg(feature = "serve")]
 #[derive(Args, Debug)]
 pub struct ServeArgs {
-    /// Directory to serve.
-    #[arg(value_name = "DIR", default_value = ".")]
+    /// Directory to serve, or a document to open at `/`.
+    #[arg(value_name = "PATH", default_value = ".")]
     pub root: PathBuf,
 
     /// Address to listen on, as `HOST:PORT` or just a port number.

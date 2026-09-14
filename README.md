@@ -54,7 +54,7 @@ linted with — including a `rustfmt` that accepts the nightly options
 ```
 adocers [OPTIONS] <FILE>...   # same as `adocers render`
 adocers render [OPTIONS] <FILE>...
-adocers serve [OPTIONS] [DIR]
+adocers serve [OPTIONS] [PATH]
 ```
 
 ## Showcase
@@ -65,8 +65,8 @@ that produces it shown, and the result directly underneath. Rendering it is the
 quickest way to see whether a change broke anything.
 
 ```
-adocers resources/showcase.adoc     # writes resources/showcase.html
-adocers serve resources             # or read it in a browser
+adocers resources/showcase.adoc         # writes resources/showcase.html
+adocers serve resources/showcase.adoc   # or read it in a browser
 ```
 
 ## render
@@ -140,12 +140,20 @@ at anything says so instead of going green.
 ```
 adocers serve ./docs
 adocers serve ./docs --bind 3000
+adocers serve ./docs/guide.adoc    # opens that document at `/`
 ```
 
 Serves a directory over HTTP, rendering each document when it is requested —
 nothing is built ahead of time and nothing is left behind. Every page carries a
 small script that reloads it when anything under the directory changes, so
 editing a file and glancing at the browser is the whole loop.
+
+Naming a document instead of a directory serves the directory around it and
+answers `/` with that document. The directory comes along because a document is
+rarely the whole of what a page needs — an `include::`, an image beside it, a
+stylesheet — and serving the file alone would hand over a page whose own
+references 404. Everything else in that directory stays reachable by name, and
+`--index-file` still applies to the directories under it.
 
 Ctrl+C stops the server once the requests in flight have finished. A page
 waiting for a change holds its request open for up to twenty seconds, so a
@@ -158,6 +166,9 @@ second Ctrl+C quits at once without waiting for it.
 | `--no-index-file` | Never stand a document in for a directory; go straight to the listing. |
 | `--no-listing` | Do not offer a browsable listing. A directory with no index document is then a 404. |
 | `--no-reload` | Do not reload pages when their sources change, and stop watching the directory. |
+
+A named document answers the served directory ahead of any `INDEX.adoc` beside
+it: naming one outright is saying you mean it.
 
 A request for a directory is answered with the first `--index-file` that exists
 in it, and otherwise with a listing of its contents — every entry linked, and
@@ -261,11 +272,13 @@ what is left.
 `503` when it is not, which makes it something a load balancer or an orchestrator
 can be pointed at. `HEAD` works too, and the answer is never cached.
 
-The one thing it checks is that the served directory is still there and still a
-directory. That is the failure a doc server can be in without noticing — an
-unmounted volume, or a deployment that moved the tree out from under it — after
-which every request answers 404 while the process itself looks perfectly well.
-Nothing is parsed or rendered, so the check is cheap enough to run every second.
+The one thing it checks is that what is being served is still there — the
+directory still a directory, or, when `serve` was pointed at a single document,
+that document still a file. That is the failure a doc server can be in without
+noticing — an unmounted volume, or a deployment that moved the tree out from
+under it — after which every request answers 404 while the process itself looks
+perfectly well. Nothing is parsed or rendered, so the check is cheap enough to
+run every second.
 
 `/healthz` is reserved: a directory of that name in the served tree is not
 reachable. Everything else the server answers for itself lives under
