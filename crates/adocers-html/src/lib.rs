@@ -141,7 +141,38 @@ pub struct Rendered {
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
 pub fn default_stylesheet() -> String {
-    css::DEFAULT.to_string()
+    format!("{}{}{}", css::VARIABLES, css::PAGE, css::DOCUMENT)
+}
+
+/// The custom properties the document rules — and every drawn diagram — read.
+///
+/// A host rendering a [`fragment`](Options::fragment) into a page of its own
+/// needs these at the top level, unscoped. A diagram drawn by this crate
+/// carries theme overrides written against them, looked up from inside the
+/// `<svg>`: a property declared out of their reach is a property that does not
+/// exist, and `fill: var(--code-bg)` resolving to nothing leaves the diagram a
+/// set of solid black boxes.
+pub fn stylesheet_variables() -> &'static str {
+    css::VARIABLES
+}
+
+/// The rules for a document's own content, for a host that supplies the page.
+///
+/// Every selector is either a class this crate emits or an element inside a
+/// document, so the whole block can be nested under wherever the host puts the
+/// document and will reach nothing else:
+///
+/// ```text
+/// article.doc {
+///     /* adocers_html::document_stylesheet() */
+/// }
+/// ```
+///
+/// Taken together with [`stylesheet_variables`], this is what a host uses
+/// instead of writing a stylesheet of its own that looks similar — and then
+/// drifts.
+pub fn document_stylesheet() -> &'static str {
+    css::DOCUMENT
 }
 
 /// Render `document` to HTML.

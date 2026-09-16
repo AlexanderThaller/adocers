@@ -3,9 +3,33 @@
 //! It targets Asciidoctor's class names, so a document rendered here looks
 //! right without pulling in Asciidoctor's own (much larger) stylesheet, and a
 //! reader who prefers a dark theme gets one.
+//!
+//! # Three parts, because a host needs them separately
+//!
+//! A host that renders a `--fragment` into a page of its own — a documentation
+//! site with a navigation tree and a toolbar — cannot use the whole of this:
+//! the rules for `#header`, `#content` and the outline describe a page it is
+//! not making. But it *must* have the rest, and not a stylesheet of its own
+//! written to look similar.
+//!
+//! The reason is [`VARIABLES`]. The markup this crate emits is styled by
+//! [`DOCUMENT`], and a mermaid diagram it draws carries theme overrides written
+//! against those custom properties — `fill: var(--code-bg)` and its like. A
+//! host that declared its own names for those colours would leave every one of
+//! those overrides resolving to nothing, and `fill` falling back to its initial
+//! value: a diagram of solid black boxes, with nothing in the page to say why.
+//!
+//! So the three are exposed separately, and a host composes them: the
+//! properties at the top level where a diagram can reach them, the document
+//! rules scoped to wherever the document sits, and its own frame in place of
+//! [`PAGE`].
 
-/// The built-in stylesheet.
-pub(crate) const DEFAULT: &str = r#"
+/// The custom properties every other rule — and every drawn diagram — reads.
+///
+/// A host that supplies its own page declares these at the top level, unscoped:
+/// a diagram's own theme overrides look them up from inside the `<svg>`, and a
+/// property declared out of their reach is a property that does not exist.
+pub(crate) const VARIABLES: &str = r"
 :root {
   color-scheme: light dark;
   --bg: #fdfdfd;
@@ -62,25 +86,14 @@ pub(crate) const DEFAULT: &str = r#"
   }
 }
 
-* { box-sizing: border-box; }
+";
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-/* The three landmarks the page is made of. `#footnotes` is not among them: it
-   sits inside `#content` so that it belongs to a landmark, and constraining it
-   again there would indent it and narrow it a second time. */
-#header, #content, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
-#header { padding-top: 2.5rem; }
-#footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
-
-/* Footnote definitions, gathered under a rule at the foot of the page. */
+/// The rules for a document's own content.
+///
+/// Every selector here is either a class Asciidoctor emits or an element inside
+/// a document, so the whole block can be nested under wherever a host puts the
+/// document — `article.doc { … }` — and reach nothing else.
+pub(crate) const DOCUMENT: &str = r#"/* Footnote definitions, gathered under a rule at the foot of the page. */
 #footnotes { margin-top: 2.5rem; font-size: 0.9rem; color: var(--muted); }
 #footnotes hr { margin: 0 0 1rem; }
 #footnotes .footnote { margin-bottom: 0.5rem; padding-left: 1.5rem; text-indent: -1.5rem; }
@@ -121,7 +134,7 @@ h1 > .link, h2 > .link, h3 > .link, h4 > .link, h5 > .link, h6 > .link {
    image — the underline is noise and comes off again. */
 a { color: var(--accent); text-decoration: underline; text-underline-offset: 0.15em; }
 a:hover { text-decoration-thickness: 2px; }
-#toc a, a.image, a.anchor { text-decoration: none; }
+a.image, a.anchor { text-decoration: none; }
 h1 > .link, h2 > .link, h3 > .link, h4 > .link, h5 > .link, h6 > .link { text-decoration: none; }
 h1 > .link:hover, h2 > .link:hover, h3 > .link:hover, h4 > .link:hover,
 h5 > .link:hover, h6 > .link:hover { text-decoration: underline; }
@@ -137,34 +150,6 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
 /* The remark is a sentence about the revision, not another labelled value. */
 .details .remark { margin-top: 0.75rem; font-style: italic; }
 .title { font-style: italic; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.95rem; }
-
-/* The outline, as a column of entries against a rail rather than a boxed list.
-   The rail is what holds the column together, so the box around it is one
-   boundary too many — and it leaves somewhere for the mark on the section being
-   read to go. The title is set small and lettered, because at the head of a
-   list of headings it is a label rather than another heading. */
-#toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
-#toctitle {
-  margin: 0 0 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-#toc ul { list-style: none; margin: 0; padding: 0; }
-#toc ul ul { padding-left: 0.75rem; }
-#toc a {
-  display: block;
-  padding: 0.15rem 0 0.15rem 0.6rem;
-  border-left: 2px solid var(--rule);
-  color: var(--muted);
-  line-height: 1.4;
-  font-size: 0.875rem;
-}
-#toc a:hover { color: var(--fg); border-left-color: var(--muted); }
-/* `is-active` is put on by the outline's own script; see `reading`. */
-#toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
 
 /* Code */
 code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
@@ -333,6 +318,59 @@ table.tableblock td.valign-bottom, table.tableblock th.valign-bottom { vertical-
    row taller than its neighbours and push its text out of line with them. */
 table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; }
 
+"#;
+
+/// The rules for the page a standalone document is put in: the reset, the body,
+/// the three landmarks, and the outline.
+///
+/// A host with a page of its own replaces this and keeps the other two.
+pub(crate) const PAGE: &str = r#"* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* The three landmarks the page is made of. `#footnotes` is not among them: it
+   sits inside `#content` so that it belongs to a landmark, and constraining it
+   again there would indent it and narrow it a second time. */
+#header, #content, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
+#header { padding-top: 2.5rem; }
+#footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
+
+/* The outline, as a column of entries against a rail rather than a boxed list.
+   The rail is what holds the column together, so the box around it is one
+   boundary too many — and it leaves somewhere for the mark on the section being
+   read to go. The title is set small and lettered, because at the head of a
+   list of headings it is a label rather than another heading. */
+#toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
+#toctitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#toc ul { list-style: none; margin: 0; padding: 0; }
+#toc ul ul { padding-left: 0.75rem; }
+#toc a {
+  display: block;
+  padding: 0.15rem 0 0.15rem 0.6rem;
+  border-left: 2px solid var(--rule);
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 0.875rem;
+}
+#toc a:hover { color: var(--fg); border-left-color: var(--muted); }
+/* `is-active` is put on by the outline's own script; see `reading`. */
+#toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
+
+#toc a { text-decoration: none; }
 /* Side-docked table of contents on wide screens */
 @media (min-width: 62rem) {
   body.toc2 #toc {
