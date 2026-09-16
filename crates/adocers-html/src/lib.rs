@@ -38,6 +38,7 @@
 
 mod block;
 mod callout;
+mod copy;
 mod css;
 mod html;
 
@@ -111,6 +112,14 @@ pub struct Options {
     /// Whether an equation is converted to `MathML`, or left as the notation it
     /// was written in.
     pub math: bool,
+
+    /// Whether a verbatim block is given a button that copies it to the
+    /// clipboard.
+    ///
+    /// The button is added by a small script the page carries, so a
+    /// [`fragment`](Self::fragment) never has one: the page it is embedded in
+    /// owns what it loads.
+    pub copy: bool,
 }
 
 /// What a render produced.
@@ -677,10 +686,18 @@ fn document_page(document: &Document<'_>, options: &Options, body: &str) -> Stri
         .doctitle_sanitized()
         .unwrap_or_else(|| "Untitled".to_string());
 
-    // Nothing is delivered to the page any more: diagrams are drawn here and
-    // equations are converted here, so the only thing appended is whatever the
-    // caller asked for.
-    let body_suffix = options.body_suffix.clone();
+    // Diagrams are drawn here and equations are converted here, so nothing is
+    // fetched by the page. The one script it carries is the copy button's, and
+    // only when there is a block for it to sit on; after that comes whatever
+    // the caller asked for.
+    let mut body_suffix = String::new();
+
+    if options.copy && copy::wanted(body) {
+        body_suffix.push_str(copy::SCRIPT);
+        body_suffix.push('\n');
+    }
+
+    body_suffix.push_str(&options.body_suffix);
 
     page(
         &Page {

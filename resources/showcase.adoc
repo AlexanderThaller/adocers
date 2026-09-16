@@ -362,6 +362,11 @@ Every block keeps its `language-…` class either way, so a page can still be
 highlighted in the browser if you would rather. `--no-highlight` leaves the code
 plain, and a build without the `highlight` feature has no grammars in it at all.
 
+Hover over any of these blocks and a button appears in its corner that puts the
+code on the clipboard — callout marks left behind, since they are the page's
+annotations rather than the reader's code. It is the one script a rendered page
+carries, and `--no-copy` leaves it out.
+
 === Literal blocks
 
 A `....` block keeps its spacing and applies no substitutions at all.
@@ -1028,6 +1033,9 @@ adocers serve ./docs             # http://127.0.0.1:8080/
 
 |`--no-mermaid` / `--no-math`
 |Leave diagrams and equations as the source they were written as.
+
+|`--no-copy`
+|Leave verbatim blocks without their copy button, and the page without script.
 
 |`--safe-mode MODE`
 |`unsafe` (default), `safe`, `server` or `secure`.

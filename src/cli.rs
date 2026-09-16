@@ -84,6 +84,13 @@ pub struct CommonArgs {
     #[arg(long = "no-mermaid", global = true)]
     pub no_mermaid: bool,
 
+    /// Leave verbatim blocks without a button that copies them.
+    ///
+    /// The button is added by a small script the page carries, so this is also
+    /// the way to a page with no script in it at all.
+    #[arg(long = "no-copy", global = true)]
+    pub no_copy: bool,
+
     /// Show equations as the notation they were written in.
     ///
     /// An equation is converted to `MathML` while the page is rendered, so this
