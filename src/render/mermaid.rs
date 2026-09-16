@@ -36,8 +36,15 @@ use merman::{
 /// The page's own colours, applied to the parts of a diagram that are chrome
 /// rather than data.
 ///
-/// Appended after `merman`'s stylesheet and scoped to the same id, so these win
-/// on order without needing `!important` or a specificity fight.
+/// Each entry is a selector list and the declarations to put on it. They are
+/// kept apart because only the selectors may be scoped to the diagram, and a
+/// scope has to go in front of a whole selector rather than in front of every
+/// class in it: `text.actor` scoped by hand becomes `text#id .actor`, which
+/// matches nothing, and `opacity:0.9` is not a selector at all.
+///
+/// The rules are emitted after `merman`'s own stylesheet and scoped to the same
+/// id, so these win on order without needing `!important` or a specificity
+/// fight.
 ///
 /// Substituting colour literals instead does not work, and it is worth saying
 /// why: mermaid paints a flowchart node and the first slice of a pie chart the
@@ -45,24 +52,177 @@ use merman::{
 /// colour there is nothing left to tell them apart. Only the class says which
 /// is which — so a pie keeps its palette and a git graph keeps its branch
 /// colours, while the boxes, lines and labels around them follow the reader.
-const THEME: &str =
-    "\
-.node rect,.node circle,.node ellipse,.node polygon,.node \
-     path{fill:var(--code-bg);stroke:var(--accent);}.nodeLabel,.nodeLabel p,.label,.label \
-     text,.labelText{fill:var(--fg);color:var(--fg);}.edgePath \
-     .path,.flowchart-link{stroke:var(--muted);}.arrowheadPath,.marker{fill:var(--muted);stroke:\
-     var(--muted);}.edgeLabel,.edgeLabel p,.edgeLabel \
-     rect{fill:var(--bg);color:var(--fg);background-color:var(--bg);}.cluster \
-     rect{fill:var(--sidebar-bg);stroke:var(--rule);}.cluster text,.cluster \
-     span{fill:var(--fg);color:var(--fg);}.actor{fill:var(--code-bg);stroke:var(--accent);}.\
-     actor-line{stroke:var(--rule);}text.actor,text.actor>tspan{fill:var(--fg);stroke:none;}.\
-     messageText,.labelText,.loopText,.loopText>tspan,.noteText,.noteText>tspan{fill:var(--fg);\
-     stroke:none;}.messageLine0,.messageLine1{stroke:var(--muted);}.note{fill:var(--sidebar-bg);\
-     stroke:var(--rule);}.labelBox{fill:var(--code-bg);stroke:var(--accent);}.loopLine{stroke:\
-     var(--rule);}.activation0,.activation1,.activation2{fill:var(--sidebar-bg);stroke:\
-     var(--rule);}.pieTitleText,.slice,.legend \
-     text{fill:var(--fg);}.pieOuterCircle{stroke:var(--rule);}.commit-label,.branch-label{fill:\
-     var(--fg);}.commit-label-bkg,.branch-label-bkg{fill:var(--sidebar-bg);opacity:0.9;}";
+const THEME: &[(&str, &str)] = &[
+    // What anything the rest of this table does not name falls back to.
+    // Mermaid's own default is `#333`, which is all but invisible on a dark
+    // page. An element carrying its own `fill` — a pie slice, a git branch —
+    // keeps it, because a presentation attribute outranks an inherited value.
+    ("&", "fill:var(--fg);"),
+    (
+        ".flowchartTitleText,.gitTitleText,.statediagramTitleText,.classTitleText",
+        "fill:var(--fg);",
+    ),
+    // Flowcharts.
+    (
+        ".node rect,.node circle,.node ellipse,.node polygon,.node path",
+        "fill:var(--code-bg);stroke:var(--accent);",
+    ),
+    (".node .katex path", "fill:var(--fg);stroke:var(--fg);"),
+    // A git graph writes each branch's name on a chip painted in that branch's
+    // colour, and picks the name's colour to suit the chip — data, both of
+    // them, so the label rules step around that one group and leave mermaid's
+    // cascade to decide it.
+    (
+        ".nodeLabel,.nodeLabel p,.label:not([class*=\"branch-label\"]),         \
+         .label:not([class*=\"branch-label\"]) text,.label span,.labelText",
+        "fill:var(--fg);color:var(--fg);",
+    ),
+    (
+        ".edgePaths .path,.edgePath .path,.flowchart-link,.transition,.relation",
+        "stroke:var(--muted);",
+    ),
+    (
+        ".edgeLabel,.edgeLabel p,.labelBkg",
+        "background-color:var(--bg);color:var(--fg);",
+    ),
+    (".edgeLabel rect,.edgeLabel .label rect", "fill:var(--bg);"),
+    (
+        ".label div .edgeLabel,.edgeLabel .label text",
+        "fill:var(--fg);color:var(--fg);",
+    ),
+    (
+        ".cluster rect,.statediagram-cluster rect,.statediagram-cluster.statediagram-cluster \
+         .inner",
+        "fill:var(--sidebar-bg);stroke:var(--rule);",
+    ),
+    (
+        ".cluster text,.cluster span,.cluster-label text,.cluster-label span",
+        "fill:var(--fg);color:var(--fg);",
+    ),
+    // Arrowheads. Mermaid draws them inside `<marker>` elements named after the
+    // diagram rather than given a class, so they are reached through the
+    // element instead: every marker in a diagram is an arrow of some kind, and
+    // all of them are chrome. The `[id]` is not there to narrow anything — a
+    // marker without one would be unusable — but to match the specificity of
+    // the `[id$="-arrowhead"]` rules it is overriding, which order alone would
+    // not be enough to beat.
+    (
+        ".arrowheadPath,.marker,marker[id] path,marker[id] circle",
+        "fill:var(--muted);stroke:var(--muted);",
+    ),
+    // A class diagram's relation ends are the one place mermaid reaches for
+    // `!important`, so outranking them means matching it. Which of them are
+    // filled and which are hollow is left alone: that is the difference
+    // between composition and aggregation, and it is being read, not decorated.
+    (
+        ".composition,.dependency",
+        "fill:var(--muted)!important;stroke:var(--muted)!important;",
+    ),
+    (".extension,.aggregation", "stroke:var(--muted)!important;"),
+    (
+        ".lollipop",
+        "fill:var(--code-bg)!important;stroke:var(--accent)!important;",
+    ),
+    // The number sits on a marker's disc, so it takes the page's ground.
+    (".sequenceNumber", "fill:var(--bg);stroke:none;"),
+    // Sequence diagrams. The boxes and their labels both carry `.actor`, so the
+    // element has to say which of the two is being coloured.
+    (
+        "rect.actor,.actor-man circle,.actor-man line,.labelBox",
+        "fill:var(--code-bg);stroke:var(--accent);",
+    ),
+    ("text.actor,text.actor>tspan", "fill:var(--fg);stroke:none;"),
+    (".actor-line", "stroke:var(--rule);"),
+    (
+        ".messageText,.loopText,.loopText>tspan,.noteText,.noteText>tspan,.sectionTitle,.\
+         sectionTitle>tspan",
+        "fill:var(--fg);stroke:none;",
+    ),
+    (".messageLine0,.messageLine1", "stroke:var(--muted);"),
+    (
+        ".note,g rect.rect",
+        "fill:var(--sidebar-bg);stroke:var(--rule);",
+    ),
+    (".loopLine", "stroke:var(--rule);"),
+    (
+        ".activation0,.activation1,.activation2",
+        "fill:var(--sidebar-bg);stroke:var(--rule);",
+    ),
+    // State and class diagrams.
+    (
+        "g.stateGroup rect,g.classGroup rect,.stateLabel .box,.classLabel .box,.stateGroup \
+         .composit,.stateGroup .alt-composit,.statediagram-state rect.divider,.end-state-inner",
+        "fill:var(--code-bg);stroke:var(--accent);",
+    ),
+    ("g.stateGroup text", "fill:var(--fg);stroke:none;"),
+    ("g.stateGroup line", "stroke:var(--muted);"),
+    // Solid on purpose: these are the filled discs a state machine starts and
+    // forks at, not boxes with something written in them.
+    (
+        ".node circle.state-start,.node .fork-join",
+        "fill:var(--fg);stroke:var(--fg);",
+    ),
+    (
+        ".state-note,.statediagram-note rect",
+        "fill:var(--sidebar-bg);stroke:var(--rule);",
+    ),
+    (
+        ".state-note text,.statediagram-note text,.statediagram-note .nodeLabel,.noteLabel \
+         .nodeLabel,.noteLabel .edgeLabel",
+        "fill:var(--fg);color:var(--fg);",
+    ),
+    // Pie charts and git graphs: the labels that sit on the page follow it, and
+    // the ones that sit on the data follow the data. A slice's percentage is
+    // written across the wedge, in mermaid's palette rather than the reader's,
+    // so it stays where mermaid put it.
+    (".pieTitleText,.legend text", "fill:var(--fg);"),
+    // A slice is data; the hairline separating one from the next is not, and
+    // mermaid draws it in black, which on a dark page reads as a gap.
+    (".pieOuterCircle", "stroke:var(--rule);"),
+    (".pieCircle", "stroke:var(--bg);"),
+    (".branch", "stroke:var(--muted);"),
+    (".tag-hole", "fill:var(--bg);"),
+    // A commit's hash sits on the page, on a card of mermaid's own.
+    (".commit-label", "fill:var(--fg);"),
+    (
+        ".commit-label-bkg,.tag-label-bkg",
+        "fill:var(--sidebar-bg);opacity:0.9;",
+    ),
+];
+
+/// [`THEME`] as a stylesheet, with every selector scoped to the diagram `id`.
+///
+/// `&` stands for the diagram element itself, as it does in a nested
+/// stylesheet; anything else is taken to be a descendant of it.
+fn theme(id: &str) -> String {
+    let mut css = String::new();
+
+    for (selectors, declarations) in THEME {
+        for (nth, selector) in selectors.split(',').enumerate() {
+            if nth > 0 {
+                css.push(',');
+            }
+
+            css.push('#');
+            css.push_str(id);
+
+            match selector.trim() {
+                "&" => {}
+
+                selector => {
+                    css.push(' ');
+                    css.push_str(selector);
+                }
+            }
+        }
+
+        css.push('{');
+        css.push_str(declarations);
+        css.push('}');
+    }
+
+    css
+}
 
 /// Draw `source` as an SVG, or `None` if `merman` cannot read it.
 ///
@@ -122,7 +282,7 @@ fn adapt(svg: &str, id: &str) -> String {
     let out = out.replace("background-color: white", "background-color: transparent");
 
     // Appended inside the element, after the stylesheet it is overriding.
-    let theme = format!("<style>{}</style>", THEME.replace('.', &format!("#{id} .")));
+    let theme = format!("<style>{}</style>", theme(id));
 
     match out.find("</style>") {
         Some(at) => {
@@ -184,6 +344,45 @@ mod tests {
         // diagram carrying them would print as empty boxes.
         assert!(!svg.contains("foreignObject"), "labels should be SVG text");
         assert!(svg.contains("one") && svg.contains("two"));
+    }
+
+    #[test]
+    fn colours_a_sequence_diagram_s_labels_and_arrows() {
+        let svg = svg(
+            "sequenceDiagram\n  A->>B: hello\n  Note over A,B: a note",
+            "d1",
+        )
+        .expect("renders");
+
+        // The actor labels and the actor boxes both carry `.actor`, and a
+        // scope written in front of every class turns `text.actor` into
+        // `text#d1 .actor`, which matches nothing — leaving the labels black on
+        // whatever the boxes were filled with.
+        assert!(
+            svg.contains("#d1 text.actor"),
+            "an actor's label should be scoped by element, not by class"
+        );
+        assert!(
+            !svg.contains("text#d1"),
+            "the scope goes before the selector"
+        );
+
+        // Arrowheads live in markers named after the diagram rather than given
+        // a class, so a class-only theme leaves them at mermaid's near-black.
+        assert!(
+            svg.contains("#d1 marker[id] path"),
+            "arrowheads should follow the page"
+        );
+    }
+
+    #[test]
+    fn leaves_the_declarations_alone() {
+        let svg = svg("gitGraph\n  commit", "d1").expect("renders");
+
+        assert!(
+            svg.contains("opacity:0.9"),
+            "a decimal point is not a class"
+        );
     }
 
     #[test]
