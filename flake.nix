@@ -1,5 +1,5 @@
 {
-  description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode";
+  description = "Render AsciiDoc documents to HTML or PDF, with source-anchored diagnostics, a watch mode and a preview server";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

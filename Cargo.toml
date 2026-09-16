@@ -83,9 +83,16 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
+description = "Render AsciiDoc documents to HTML or PDF, with source-anchored diagnostics, a watch mode and a preview server"
 keywords = ["asciidoc", "html", "pdf", "asciidoctor", "cli"]
 categories = ["command-line-utilities", "text-processing"]
+
+# Build the documentation with everything switched on, so that items behind a
+# feature are in it rather than missing without explanation. Rustdoc labels
+# each with the feature it needs on its own since 1.92, so nothing here has to
+# ask for that.
+[package.metadata.docs.rs]
+all-features = true
 
 # `resources/` carries two git submodules — Asciidoctor's own website and their
 # Ruby doctest project — which the benchmarks and the doctest suite read. They

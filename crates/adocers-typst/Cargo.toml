@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+documentation = "https://docs.rs/adocers-typst"
 keywords = ["asciidoc", "pdf", "typst", "typesetting", "documentation"]
 categories = ["text-processing"]
 
@@ -20,6 +21,13 @@ math = ["dep:asciimath-rs"]
 # Place drawn mermaid diagrams. Without it a diagram is typeset as the listing
 # block it was written as.
 mermaid = ["adocers-render-core/mermaid"]
+
+# Build the documentation with everything switched on, so that items behind a
+# feature are in it rather than missing without explanation. Rustdoc labels
+# each with the feature it needs on its own since 1.92, so nothing here has to
+# ask for that.
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 adocers-render-core = { workspace = true, default-features = false }

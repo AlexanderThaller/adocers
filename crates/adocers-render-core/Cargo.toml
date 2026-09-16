@@ -6,7 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-keywords = ["asciidoc", "markup", "documentation", "rendering"]
+documentation = "https://docs.rs/adocers-render-core"
+keywords = ["asciidoc", "asciidoctor", "markup", "documentation", "rendering"]
 categories = ["text-processing"]
 
 [features]
@@ -15,6 +16,13 @@ default = ["mermaid"]
 # Draw mermaid diagrams, with `merman`. Without it a back end has nothing to
 # draw one with and renders the listing block it was written as.
 mermaid = ["dep:merman"]
+
+# Build the documentation with everything switched on, so that items behind a
+# feature are in it rather than missing without explanation. Rustdoc labels
+# each with the feature it needs on its own since 1.92, so nothing here has to
+# ask for that.
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 asciidoc-parser.workspace = true
