@@ -73,6 +73,15 @@ adocers resources/showcase.adoc         # writes resources/showcase.html
 adocers serve resources/showcase.adoc   # or read it in a browser
 ```
 
+`resources/showcase_de.adoc` is the same idea in German: what changes when a
+document is not written in English. It sets every built-in label attribute,
+shows where the translations come from, and names the two places adocers still
+writes English regardless.
+
+```
+adocers resources/showcase_de.adoc -o showcase_de.pdf
+```
+
 ## render
 
 Each input is rendered to a sibling `.html` file:

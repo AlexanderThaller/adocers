@@ -1,0 +1,296 @@
+= adocers auf Deutsch: was die Lokalisierung ändert
+Alexander Thaller <alexander@thaller.ws>
+v1.0, 2026-09-16: dieselbe Seite, in einer anderen Sprache
+:lang: de
+:description: Wie ein deutsches Dokument gesetzt wird: die Beschriftungen, die \
+Sprache und das, was noch englisch bleibt.
+:toc: left
+:toclevels: 3
+:sectnums:
+:appendix-caption: Anhang
+:appendix-refsig: {appendix-caption}
+:caution-caption: Achtung
+:chapter-signifier: Kapitel
+:chapter-refsig: {chapter-signifier}
+:example-caption: Beispiel
+:figure-caption: Abbildung
+:important-caption: Wichtig
+:last-update-label: Zuletzt aktualisiert
+:listing-caption: Listing
+:manname-title: Bezeichnung
+:note-caption: Anmerkung
+:part-signifier: Teil
+:part-refsig: {part-signifier}
+:preface-title: Vorwort
+:section-refsig: Abschnitt
+:table-caption: Tabelle
+:tip-caption: Hinweis
+:toc-title: Inhaltsverzeichnis
+:untitled-label: Ohne Titel
+:version-label: Version
+:warning-caption: Warnung
+
+`showcase.adoc` zeigt, was adocers rendern kann. Diese Seite zeigt etwas
+anderes: was sich ändert, wenn dasselbe Dokument nicht auf Englisch geschrieben
+ist. Am schnellsten zu sehen ist das nebeneinander --
+
+[source,console]
+----
+adocers resources/showcase.adoc resources/showcase_de.adoc
+adocers resources/showcase_de.adoc -o showcase_de.pdf
+----
+
+-- denn oben links steht jetzt *Inhaltsverzeichnis* statt *Table of Contents*,
+und die Anmerkung unter diesem Absatz trägt nicht mehr das Wort *Note*.
+
+NOTE: Keine dieser Übersetzungen ist in adocers eingebaut. Ein Dokument setzt
+die Wörter selbst, und der Renderer schreibt auf, was es gesagt hat.
+
+== Die Sprache des Dokuments
+
+`:lang:` ist das einzige Attribut dieser Seite, das nicht bloß ein Wort
+austauscht. Es benennt die Sprache, in der das Dokument geschrieben ist, und
+beide Ausgabeformate richten sich danach:
+
+HTML:: Das Attribut wird zu `<html lang="de">`. Ein Vorleseprogramm wählt
+danach seine Stimme, und eine Suchmaschine weiß, wen die Seite angeht.
+
+PDF:: Typst bekommt `#set text(lang: "de")` und daraus zweierlei: die
+Trennmuster, nach denen es lange Wörter am Zeilenende umbricht, und die
+Anführungszeichen, die es setzt.
+
+Ein Tag mit Region -- `pt-BR`, `zh-Hans-CN` -- wird aufgeteilt, weil Typst
+Sprache und Region getrennt entgegennimmt.
+
+=== Anführungszeichen
+
+Hier laufen zwei Mechanismen nebeneinander her, und sie sind sich nicht einig.
+Dieselben drei Paare, so geschrieben:
+
+[source,asciidoc]
+----
+Erstens "`Hallo`", zweitens "Hallo", drittens „Hallo“.
+----
+
+ergeben dies:
+
+Erstens "`Hallo`", zweitens "Hallo", drittens „Hallo“.
+
+Im PDF steht danach `“Hallo”`, `„Hallo“`, `„Hallo“`. Das erste Paar ist
+englisch geblieben, obwohl `:lang: de` gesetzt ist: `+"`...`"+` ist eine
+Ersetzung von AsciiDoc selbst, und die kennt keine Sprache -- sie liefert immer
+das englische Paar. Das zweite Paar ist gerade, bis Typst es sieht; dessen
+`smartquote` richtet sich nach `lang` und macht deutsche Zeichen daraus. Das
+dritte steht schon so in der Quelle und bleibt, wie es ist.
+
+TIP: Wer die Zeichen in beiden Ausgabeformaten richtig haben will, schreibt sie
+aus: `„...“`. Auf der HTML-Seite wird aus `"Hallo"` nämlich nichts -- dort
+bleiben die geraden Zeichen stehen, weil nur Typst nachträglich ersetzt.
+
+=== Worttrennung
+
+Der folgende Absatz ist im Blocksatz gesetzt und aus Wörtern gebaut, wie die
+Verwaltungssprache sie hervorbringt. Im PDF entscheidet Typst anhand von `lang`,
+wo es sie am Zeilenende auftrennt.
+
+Eine Gebrauchsanweisung, eine Betriebsvereinbarung, eine
+Verwaltungsvorschriftensammlung: die Gebrauchssprache der Verwaltung besteht aus
+Zusammensetzungen, und Zusammensetzungen sind lang. Die
+Kraftfahrzeughaftpflichtversicherung, die Geschwindigkeitsbeschränkung, die
+Arbeitnehmerentsendegesetzgebung und die Grundstücksverkehrsgenehmigung stehen
+in Gesetzestexten nebeneinander, als wäre daran nichts Besonderes. Eine Zeile,
+die eines dieser Wörter nicht mehr unterbringt, muss es trennen können, sonst
+bleibt ihr rechtes Ende leer und der Wortabstand in der Zeile davor wird
+auseinandergezogen. Wo die Trennstelle liegt, entscheiden die Trennmuster, und
+die Trennmuster gehören zur Sprache: Unregelmäßigkeiten,
+Selbstverständlichkeiten und Verhältnismäßigkeitsprüfungen werden im Deutschen
+anders zerlegt als eine Maschine es täte, die Englisch gelernt hat.
+
+Wer das nachprüfen will, setzt denselben Absatz zweimal und hält die Seiten
+nebeneinander:
+
+[source,console]
+----
+adocers resources/showcase_de.adoc -o de.pdf
+sed 's/^:lang: de$/:lang: en/' resources/showcase_de.adoc > en.adoc
+adocers en.adoc -o en.pdf
+----
+
+Mit `:lang: de` trennt Typst *Arbeitnehmerentsendegesetz-gebung* und
+*Trenn-stelle*, also dort, wo die Zusammensetzung ihre Fuge hat. Mit `:lang: en`
+zerlegt es dieselben Wörter zu *Arbeitnehmerentsendege-setzgebung* und
+*Un-regelmäßigkeiten* -- nach englischen Mustern, die hier nichts zu suchen
+haben.
+
+CAUTION: In gewöhnlicher Fließtextbreite fallen die beiden Fassungen oft
+zusammen: eine lange Zeile bietet wenige Gelegenheiten zu trennen, und bei den
+wenigen sind sich die Muster meist einig. Der Unterschied tritt dort hervor, wo
+viel getrennt werden muss -- in schmalen Spalten, in Tabellenzellen und in
+Absätzen wie dem obigen.
+
+== Die Beschriftungen
+
+Alles Übrige sind Wörter, die der Renderer ohnehin aufs Papier schreibt -- vor
+eine Tabelle, über das Inhaltsverzeichnis, neben ein Ausrufezeichen. Jedes
+davon liegt in einem Attribut, und der Kopf dieser Seite setzt sie alle.
+
+.Die eingebauten Beschriftungen und was diese Seite aus ihnen macht
+[cols="1,1,1",options="header"]
+|===
+| Attribut | Vorgabe | Auf dieser Seite
+
+| `appendix-caption` | Appendix | Anhang
+| `caution-caption` | Caution | Achtung
+| `chapter-signifier` | Chapter | Kapitel
+| `example-caption` | Example | Beispiel
+| `figure-caption` | Figure | Abbildung
+| `important-caption` | Important | Wichtig
+| `last-update-label` | Last updated | Zuletzt aktualisiert
+| `listing-caption` | -- | Listing
+| `manname-title` | Name | Bezeichnung
+| `note-caption` | Note | Anmerkung
+| `part-signifier` | Part | Teil
+| `preface-title` | Preface | Vorwort
+| `section-refsig` | Section | Abschnitt
+| `table-caption` | Table | Tabelle
+| `tip-caption` | Tip | Hinweis
+| `toc-title` | Table of Contents | Inhaltsverzeichnis
+| `untitled-label` | Untitled | Ohne Titel
+| `version-label` | Version | Version
+| `warning-caption` | Warning | Warnung
+|===
+
+`listing-caption` hat keine Vorgabe: ein Listing wird nur beschriftet, wenn ein
+Dokument ausdrücklich darum bittet. Diese Seite bittet darum, damit unten im
+Anhang zu sehen ist, wie es aussieht.
+
+Zu `appendix-caption`, `chapter-signifier` und `part-signifier` gehört je ein
+`-refsig`, das der Querverweis benutzt. Meistens ist es dasselbe Wort, und dann
+schreibt man es nicht zweimal hin, sondern verweist:
+
+[source,asciidoc]
+----
+:appendix-caption: Anhang
+:appendix-refsig: {appendix-caption}
+----
+
+=== Woher die Wörter kommen
+
+Diese Seite setzt die Attribute in ihrem eigenen Kopf, damit sie für sich
+allein steht. Ein Dokument, das nicht nur eine Vorführung ist, holt sie besser
+aus Asciidoctors Übersetzungsdateien -- dreißig Sprachen, von Menschen
+übersetzt, die sie sprechen:
+
+[source,asciidoc]
+----
+= Ein Dokument
+:lang: de
+\include::locale/attributes.adoc[]
+----
+
+`attributes.adoc` besteht aus einer einzigen Zeile, die anhand von `:lang:`
+weiterleitet, und `attributes-de.adoc` daneben enthält die Wörter. Beide Dateien
+liegen im Asciidoctor-Projekt unter `data/locale/`. adocers löst die Kette
+vollständig auf: den bedingten Einschluss, den Dateinamen, der aus einem
+Attribut zusammengesetzt wird, und die `ifdef`-Klammern um `listing-caption` und
+`preface-title`.
+
+Einzelne Wörter lassen sich auch auf der Kommandozeile umstellen, und was dort
+steht, gewinnt gegen den Kopf des Dokuments:
+
+[source,console]
+----
+adocers showcase_de.adoc -a toc-title=Inhalt
+----
+
+== Beschriftete Blöcke
+
+Tabelle, Beispiel, Abbildung und Listing werden gezählt, und vor die Zahl setzt
+der Renderer das Wort aus dem passenden Attribut.
+
+.Eine Tabelle mit Titel
+[cols="1,2",options="header"]
+|===
+| Format | Wofür
+
+| HTML | Lesen im Browser, eine Datei ohne Zubehör
+| PDF | Drucken und Weitergeben, über Typst gesetzt
+|===
+
+.Ein Beispiel mit Titel
+====
+Ein Beispielblock fasst zusammen, was zu einem Fall gehört.
+====
+
+.Eine Abbildung mit Titel
+image::showcase-figure.svg[Der Weg von der Quelle zur Seite,660,96]
+
+.Ein Listing mit Titel
+[source,rust]
+----
+fn main() {
+    println!("Guten Tag");
+}
+----
+
+== Hinweisblöcke
+
+Fünf Sorten, jede mit ihrem eigenen Wort. Das Wort steht nicht auf der Seite --
+gezeichnet wird ein Symbol -- aber es ist sein zugänglicher Name, und
+`--no-icons` schreibt es aus.
+
+NOTE: Etwas, das man wissen sollte, ohne dass die Arbeit daran hängt.
+
+TIP: Ein besserer Weg für das, was man ohnehin gerade tut.
+
+IMPORTANT: Etwas, das man nicht übersehen sollte, auch wenn nichts kaputtgeht.
+
+CAUTION: Wer hier unachtsam weitermacht, verliert womöglich Arbeit.
+
+WARNING: Dieser Block warnt vor Schaden, der schwer wieder gutzumachen ist.
+
+.Ein Hinweisblock mit Titel und mehreren Absätzen
+[NOTE]
+====
+Die abgegrenzte Form fasst so viel, wie man hineinschreibt.
+
+* auch Listen
+* und alles andere
+====
+
+== Querverweise
+
+Ein Verweis auf <<anhang>> nennt den Titel des Abschnitts. `section-refsig` und
+`appendix-refsig` kommen dort zum Zug, wo `xrefstyle` nach dem Signalwort
+verlangt statt nach dem Titel -- dann steht dort *Abschnitt 2* oder *Anhang A*
+und nicht die Überschrift selbst.
+
+== Was englisch bleibt
+
+Zwei Stellen übersetzt adocers noch nicht, und ehrlicher ist es, sie hier zu
+nennen, als sie zu verschweigen.
+
+Die Angaben unter dem Titel:: Oben auf dieser Seite steht `Author:`, `Version:`
+und `Date:`, obwohl `version-label` gesetzt ist. Die Fußzeile macht es richtig
+und schreibt *Zuletzt aktualisiert*. Für `Author:` und `Date:` gibt es in
+AsciiDoc kein Attribut, aus dem sich das Wort holen ließe -- die beschriftete
+Form ist adocers' eigene Darreichung, und wo diese beiden Wörter herkommen
+sollen, ist noch nicht entschieden.
+
+Der Titel der HTML-Seite:: Ein Dokument ohne Titel bekommt `<title>Untitled</title>`,
+und zwar auch dann, wenn `untitled-label` etwas anderes sagt. Diese Seite hat
+einen Titel, also fällt es hier nicht auf.
+
+[appendix]
+[[anhang]]
+== Ein Anhang
+
+Ein Anhang trägt sein Wort in voller Länge: oben in der Überschrift steht
+*Anhang A:* und im Inhaltsverzeichnis dasselbe. Das ist der Unterschied zu
+einem gewöhnlichen nummerierten Abschnitt, der nur seine Zahl bekommt.
+
+.Auch hier wird gezählt
+[source,console]
+----
+adocers resources/showcase_de.adoc -o - | grep '<h2'
+----

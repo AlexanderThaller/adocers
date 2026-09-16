@@ -87,14 +87,17 @@ description = "Render AsciiDoc documents to HTML or PDF, with source-anchored di
 keywords = ["asciidoc", "html", "pdf", "asciidoctor", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 
-# `resources/` carries two git submodules — Asciidoctor's own website and their
-# Ruby doctest project — which the benchmarks and the doctest suite read. They
-# are someone else's repositories and fifty times the size of this one, so a
-# published crate does not carry them: both suites already skip what they
-# cannot find. Excluding them takes the package from 7.1 MB to 136 KB.
+# `resources/` is the corpus the benchmarks and the doctest suite read, and none
+# of it is the crate. Two of its entries are git submodules — Asciidoctor's own
+# website and their Ruby doctest project — which are someone else's repositories
+# and fifty times the size of this one; the rest is the showcase document and
+# its pictures, which only the benchmarks read. So the directory goes as a
+# whole, and `benches/` goes with it rather than shipping a target that panics
+# on the first file it cannot find. Both test suites already skip what they
+# cannot find. Excluding all of it takes the package from 7.1 MB to 129 KB.
 exclude = [
-  "resources/asciidoctor-doctest",
-  "resources/asciidoctor.org",
+  "/resources/",
+  "/benches/",
   "CLAUDE.md",
 ]
 
