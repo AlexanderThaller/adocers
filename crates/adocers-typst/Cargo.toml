@@ -30,7 +30,7 @@ mermaid = ["adocers-render-core/mermaid"]
 all-features = true
 
 [dependencies]
-adocers-render-core = { workspace = true, default-features = false }
+adocers-render-core.workspace = true
 anyhow.workspace = true
 asciidoc-parser.workspace = true
 asciimath-rs = { workspace = true, optional = true }

@@ -10,9 +10,12 @@ repository = "https://github.com/AlexanderThaller/adocers"
 rust-version = "1.96"
 
 [workspace.dependencies]
-adocers-html = { version = "0.1", path = "crates/adocers-html" }
-adocers-render-core = { version = "0.1", path = "crates/adocers-render-core" }
-adocers-typst = { version = "0.1", path = "crates/adocers-typst" }
+# Every crate here takes these with their defaults off and re-enables what it
+# wants through features of its own, so the workspace entry says so. A member
+# that tried to override it instead is what newer cargo refuses.
+adocers-html = { version = "0.1", path = "crates/adocers-html", default-features = false }
+adocers-render-core = { version = "0.1", path = "crates/adocers-render-core", default-features = false }
+adocers-typst = { version = "0.1", path = "crates/adocers-typst", default-features = false }
 anyhow = "1"
 asciidoc-parser = "0.31"
 asciimath-rs = "0.6.2"
@@ -129,8 +132,8 @@ math = ["adocers-html/math", "adocers-typst?/math"]
 highlight = ["adocers-html/highlight"]
 
 [dependencies]
-adocers-html = { workspace = true, default-features = false }
-adocers-typst = { workspace = true, default-features = false, optional = true }
+adocers-html.workspace = true
+adocers-typst = { workspace = true, optional = true }
 anyhow.workspace = true
 ariadne = "0.6"
 asciidoc-parser.workspace = true

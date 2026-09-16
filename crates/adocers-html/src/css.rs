@@ -342,11 +342,12 @@ body {
 #header { padding-top: 2.5rem; }
 #footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
 
-/* The outline, as a column of entries against a rail rather than a boxed list.
-   The rail is what holds the column together, so the box around it is one
-   boundary too many — and it leaves somewhere for the mark on the section being
-   read to go. The title is set small and lettered, because at the head of a
-   list of headings it is a label rather than another heading. */
+/* The outline, as a column of entries with a mark against the one being read,
+   rather than a boxed list. There is no box and no rail: a gutter is held open
+   down the side of every entry with a border that is not painted, and only the
+   section being read draws in it, so the mark has somewhere to go and nothing
+   moves when it arrives. The title is set small and lettered, because at the
+   head of a list of headings it is a label rather than another heading. */
 #toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
 #toctitle {
   margin: 0 0 0.5rem;
@@ -361,12 +362,12 @@ body {
 #toc a {
   display: block;
   padding: 0.15rem 0 0.15rem 0.6rem;
-  border-left: 2px solid var(--rule);
+  border-left: 2px solid transparent;
   color: var(--muted);
   line-height: 1.4;
   font-size: 0.875rem;
 }
-#toc a:hover { color: var(--fg); border-left-color: var(--muted); }
+#toc a:hover { color: var(--fg); }
 /* `is-active` is put on by the outline's own script; see `reading`. */
 #toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
 
@@ -381,10 +382,12 @@ body {
     overflow-y: auto;
     margin: 0;
     padding: 2rem 1.25rem;
-    background: var(--sidebar-bg);
   }
-  body.toc2.toc-left #toc { left: 0; border-right: 1px solid var(--rule); }
-  body.toc2.toc-right #toc { right: 0; border-left: 1px solid var(--rule); }
+  /* Docked, but not panelled: the page's own ground and no rule down the edge,
+     so the outline reads as part of the document rather than as a tray bolted
+     to the side of it. The margins below are what separate the two. */
+  body.toc2.toc-left #toc { left: 0; }
+  body.toc2.toc-right #toc { right: 0; }
   body.toc2.toc-left #header,
   body.toc2.toc-left #content,
   body.toc2.toc-left #footer { margin-left: calc(16rem + 2rem); }
