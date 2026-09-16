@@ -67,7 +67,7 @@
           ./src
           ./tests
           ./benches
-          ./README.md
+          ./README.adoc
           (lib.fileset.fileFilter (file: file.hasExt != "html") ./resources)
         ];
       };
