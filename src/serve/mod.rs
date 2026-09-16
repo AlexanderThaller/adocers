@@ -928,7 +928,14 @@ mod tests {
     fn leaves_ordinary_paths_alone() {
         // `.` and `..` are traversal, not hidden names, and a dot inside a
         // name is just a dot — only a leading one hides anything.
-        for path in ["/", "/guide.adoc", "/docs/guide.adoc", "/./a", "/../a", "/a..b"] {
+        for path in [
+            "/",
+            "/guide.adoc",
+            "/docs/guide.adoc",
+            "/./a",
+            "/../a",
+            "/a..b",
+        ] {
             assert!(!is_hidden(path), "{path} names nothing hidden");
         }
     }
