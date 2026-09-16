@@ -138,11 +138,33 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
 .details .remark { margin-top: 0.75rem; font-style: italic; }
 .title { font-style: italic; color: var(--muted); margin-bottom: 0.4rem; font-size: 0.95rem; }
 
-/* Table of contents */
-#toc { border: 1px solid var(--rule); border-radius: 6px; padding: 0.75rem 1.25rem; margin: 1.5rem 0 2rem; }
-#toctitle { font-weight: 600; margin-bottom: 0.25rem; }
-#toc ul { list-style: none; padding-left: 1rem; margin: 0.25rem 0; }
-#toc > ul { padding-left: 0; }
+/* The outline, as a column of entries against a rail rather than a boxed list.
+   The rail is what holds the column together, so the box around it is one
+   boundary too many — and it leaves somewhere for the mark on the section being
+   read to go. The title is set small and lettered, because at the head of a
+   list of headings it is a label rather than another heading. */
+#toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
+#toctitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#toc ul { list-style: none; margin: 0; padding: 0; }
+#toc ul ul { padding-left: 0.75rem; }
+#toc a {
+  display: block;
+  padding: 0.15rem 0 0.15rem 0.6rem;
+  border-left: 2px solid var(--rule);
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 0.875rem;
+}
+#toc a:hover { color: var(--fg); border-left-color: var(--muted); }
+/* `is-active` is put on by the outline's own script; see `reading`. */
+#toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
 
 /* Code */
 code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
@@ -211,18 +233,27 @@ pre code { background: none; padding: 0; }
 .stemblock { margin: 1.5rem 0; text-align: center; }
 .stemblock > .content { overflow-x: auto; }
 
-/* Admonitions, laid out as Asciidoctor lays them out: a wide centred icon
-   column, a rule between it and the text, and no box around the whole thing. */
-.admonitionblock { margin: 1.4rem 0; }
-.admonitionblock > table { width: 100%; border-collapse: separate; border: 0; background: none; }
+/* Admonitions, as a box with a coloured edge rather than Asciidoctor's icon
+   column and rule. The edge carries the colour, so the block says what kind of
+   aside it is from across the page — without the icon having to be large enough
+   to read as one, and without a reader who does not separate those five hues
+   losing the boundary of the aside itself. */
+.admonitionblock {
+  margin: 1.4rem 0;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--admon);
+  border-radius: 6px;
+  background: var(--sidebar-bg);
+}
+.admonitionblock > table { width: 100%; border-collapse: collapse; border: 0; background: none; }
 /* The icon is centred against the whole admonition rather than sitting at its
    top: the mark stands for the block, and a tall one left it stranded. */
-.admonitionblock td.icon { width: 80px; text-align: center; vertical-align: middle; padding: 0 0.75rem 0 0; color: var(--admon); }
-.admonitionblock td.icon .icon { width: 2.25rem; height: 2.25rem; }
+.admonitionblock td.icon { width: 3.5rem; text-align: center; vertical-align: middle; padding: 0.9rem 0 0.9rem 0.9rem; color: var(--admon); }
+.admonitionblock td.icon .icon { width: 1.75rem; height: 1.75rem; }
 .admonitionblock td.icon .title { font-style: normal; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.03em; margin: 0; color: var(--admon); }
-.admonitionblock td.content { padding: 0 0 0 1.125rem; border-left: 1px solid var(--rule); vertical-align: top; }
+.admonitionblock td.content { padding: 0.9rem 1rem; vertical-align: middle; }
 .admonitionblock td.content > :last-child { margin-bottom: 0; }
-.admonitionblock td.content > .title { text-transform: uppercase; font-style: normal; font-weight: 600; }
+.admonitionblock td.content > .title { text-transform: uppercase; font-style: normal; font-weight: 600; color: var(--fg); }
 .admonitionblock.note { --admon: var(--admon-note); }
 .admonitionblock.tip { --admon: var(--admon-tip); }
 .admonitionblock.important { --admon: var(--admon-important); }
@@ -310,8 +341,6 @@ table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; 
     bottom: 0;
     width: 16rem;
     overflow-y: auto;
-    border: 0;
-    border-radius: 0;
     margin: 0;
     padding: 2rem 1.25rem;
     background: var(--sidebar-bg);

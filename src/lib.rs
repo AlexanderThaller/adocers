@@ -151,8 +151,8 @@ fn check(args: &CheckArgs) -> Result<ExitCode> {
 /// Decide how a rendered body should be wrapped and styled.
 pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
     // A fragment keeps its diagrams' markup but carries no script of its own,
-    // the copy button's included: the page it is embedded in owns what it
-    // loads.
+    // the copy button's and the outline's mark included: the page it is
+    // embedded in owns what it loads.
     if fragment {
         return Ok(Options {
             fragment: true,
@@ -163,6 +163,7 @@ pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
             mermaid: mermaid(common),
             math: math(common),
             copy: false,
+            mark_reading: false,
         });
     }
 
@@ -185,6 +186,7 @@ pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
         mermaid: mermaid(common),
         math: math(common),
         copy: !common.no_copy,
+        mark_reading: !common.no_reading_mark,
     })
 }
 

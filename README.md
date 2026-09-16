@@ -105,7 +105,8 @@ adocers -o doc.pdf doc.adoc # writes a PDF instead
 | `--no-icons` | Mark admonitions with their label instead of an icon. |
 | `--no-highlight` | Leave source blocks unhighlighted. |
 | `--no-mermaid` | Show mermaid diagrams as the listing blocks they were written as. |
-| `--no-copy` | Leave verbatim blocks without a button that copies them, and the page without the script that adds it. |
+| `--no-copy` | Leave verbatim blocks without a button that copies them. |
+| `--no-reading-mark` | Leave the outline without a mark on the section being read. With `--no-copy`, this is the way to a page carrying no script at all. |
 | `--no-math` | Show equations as the notation they were written in. |
 | `--safe-mode <MODE>` | `unsafe` (default), `safe`, `server` or `secure`. Anything above `unsafe` confines `include::` to the document's own directory. |
 | `-w, --watch` | Re-render on change; see below. |

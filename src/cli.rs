@@ -86,10 +86,18 @@ pub struct CommonArgs {
 
     /// Leave verbatim blocks without a button that copies them.
     ///
-    /// The button is added by a small script the page carries, so this is also
-    /// the way to a page with no script in it at all.
+    /// The button is added by a small script the page carries. Together with
+    /// `--no-reading-mark` this is the way to a page with no script in it at
+    /// all.
     #[arg(long = "no-copy", global = true)]
     pub no_copy: bool,
+
+    /// Leave the outline without a mark on the section being read.
+    ///
+    /// The mark is applied by a small script the page carries, so this is the
+    /// other half of asking for a page with no script in it.
+    #[arg(long = "no-reading-mark", global = true)]
+    pub no_reading_mark: bool,
 
     /// Show equations as the notation they were written in.
     ///

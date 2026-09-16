@@ -41,6 +41,7 @@ mod callout;
 mod copy;
 mod css;
 mod html;
+mod reading;
 
 #[cfg_attr(not(feature = "highlight"), path = "highlight_off.rs")]
 mod highlight;
@@ -120,6 +121,15 @@ pub struct Options {
     /// [`fragment`](Self::fragment) never has one: the page it is embedded in
     /// owns what it loads.
     pub copy: bool,
+
+    /// Whether the outline marks the entry for the section being read.
+    ///
+    /// Beside a long document a docked outline can say where the reader is as
+    /// well as what there is, which is the difference between a list of links
+    /// and a sense of place. Like the copy button it is applied by a script the
+    /// page carries, so a [`fragment`](Self::fragment) never has it and a page
+    /// with scripting switched off still gets an outline that works.
+    pub mark_reading: bool,
 }
 
 /// What a render produced.
@@ -687,13 +697,19 @@ fn document_page(document: &Document<'_>, options: &Options, body: &str) -> Stri
         .unwrap_or_else(|| "Untitled".to_string());
 
     // Diagrams are drawn here and equations are converted here, so nothing is
-    // fetched by the page. The one script it carries is the copy button's, and
-    // only when there is a block for it to sit on; after that comes whatever
-    // the caller asked for.
+    // fetched by the page. The scripts it carries are its own — the copy
+    // button's, and the outline's reading mark — and each only when there is
+    // something for it to act on; after those comes whatever the caller asked
+    // for.
     let mut body_suffix = String::new();
 
     if options.copy && copy::wanted(body) {
         body_suffix.push_str(copy::SCRIPT);
+        body_suffix.push('\n');
+    }
+
+    if options.mark_reading && reading::wanted(body) {
+        body_suffix.push_str(reading::SCRIPT);
         body_suffix.push('\n');
     }
 
