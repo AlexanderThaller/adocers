@@ -347,6 +347,44 @@ fn properties(document: &Document<'_>, title: &str) -> String {
     out
 }
 
+/// The language of `#set text`, from the document's `:lang:`.
+///
+/// Typst reads the language for more than the record: it picks the hyphenation
+/// patterns from it, and the glyphs `smartquote` turns a quotation mark into.
+/// Left unset it assumes English, so a German document came out hyphenated and
+/// quoted as though it were English while every label on the page read German.
+///
+/// AsciiDoc writes one BCP 47 tag where Typst takes the two halves apart, so
+/// the tag is split: the first subtag is the language, and a later two-letter
+/// one is the region — which is what a two-letter subtag after the language can
+/// only be, a script being four letters and a variant five or more. A tag Typst
+/// would not recognise is left out rather than passed on, since English is what
+/// it falls back to either way.
+fn locale(document: &Document<'_>) -> String {
+    let Some(tag) = attribute(document, "lang") else {
+        return String::new();
+    };
+
+    let mut subtags = tag.trim().split('-');
+
+    let Some(language) = subtags.next().filter(|subtag| alphabetic(subtag, 2..=3)) else {
+        return String::new();
+    };
+
+    let mut out = format!(", lang: {}", string(&language.to_lowercase()));
+
+    if let Some(region) = subtags.find(|subtag| alphabetic(subtag, 2..=2)) {
+        let _ = write!(out, ", region: {}", string(&region.to_uppercase()));
+    }
+
+    out
+}
+
+/// Whether a subtag is `length` letters and nothing else.
+fn alphabetic(subtag: &str, length: std::ops::RangeInclusive<usize>) -> bool {
+    length.contains(&subtag.chars().count()) && subtag.chars().all(char::is_alphabetic)
+}
+
 /// A `YYYY-MM-DD` date, as a Typst `datetime`.
 fn date(value: &str) -> Option<String> {
     let mut parts = value.trim().splitn(3, '-');
@@ -552,11 +590,12 @@ impl Preamble {
         let _ = writeln!(
             out,
             "#set document({})\n#set page(paper: \"a4\", margin: 2.2cm, numbering: \"1\")\n#set \
-             text(size: 10.5pt)\n#set par(justify: true, leading: 0.62em)\n#show heading: it => \
+             text(size: 10.5pt{})\n#set par(justify: true, leading: 0.62em)\n#show heading: it => \
              block(above: 1.4em, below: 0.7em, it)\n#show link: it => text(fill: \
              rgb(\"#1565a8\"), it)\n#show raw.where(block: true): it => block(\n\x20 width: 100%, \
              fill: rgb(\"#f5f6f8\"), inset: 8pt, radius: 3pt, it,\n)\n{}\n{CALLOUT}\n{}\n{}\n",
             properties(document, &title),
+            locale(document),
             FITTED,
             footnotes(document, options),
             math::PRELUDE
@@ -1865,6 +1904,52 @@ mod tests {
             out.contains("#outline(title: [Table of Contents], depth: 3)"),
             "{out}"
         );
+    }
+
+    #[test]
+    fn hands_typst_the_language_the_document_is_written_in() {
+        let out = render("= T\n:lang: de\n\nText.\n");
+
+        assert!(
+            out.contains("#set text(size: 10.5pt, lang: \"de\")"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn splits_a_region_off_the_language_tag() {
+        let out = render("= T\n:lang: pt-BR\n\nText.\n");
+
+        assert!(
+            out.contains("#set text(size: 10.5pt, lang: \"pt\", region: \"BR\")"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn reads_the_region_past_a_script_subtag() {
+        let out = render("= T\n:lang: zh-Hans-CN\n\nText.\n");
+
+        assert!(
+            out.contains("#set text(size: 10.5pt, lang: \"zh\", region: \"CN\")"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn leaves_typst_its_own_default_when_the_document_names_no_language() {
+        let out = render("= T\n\nText.\n");
+
+        assert!(out.contains("#set text(size: 10.5pt)"), "{out}");
+    }
+
+    #[test]
+    fn drops_a_language_tag_typst_could_not_read() {
+        for tag in ["deutsch", "d", "1234", "de_DE"] {
+            let out = render(&format!("= T\n:lang: {tag}\n\nText.\n"));
+
+            assert!(out.contains("#set text(size: 10.5pt)"), "{tag}: {out}");
+        }
     }
 
     #[test]
