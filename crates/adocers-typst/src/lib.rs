@@ -18,12 +18,18 @@
 //! and breaks. A block it has no rendering for becomes its own text rather than
 //! a gap.
 //!
-//! Four things stop short of the page and are documented as such: an equation
-//! is shown as its source, because Typst's mathematics syntax is neither
-//! LaTeX's nor `AsciiMath`'s; a table cell written as AsciiDoc comes out empty;
-//! a passthrough is dropped, being HTML; and a cross reference to anything but
-//! a section keeps its words and loses its link, because Typst will not lay out
-//! a document that points at a label it cannot find.
+//! Equations are typeset rather than shown: LaTeX through
+//! [`mitex`](https://crates.io/crates/mitex), `AsciiMath` rewritten into
+//! Typst's own notation. When one will not lay out, every equation in the
+//! document is shown as its source instead — a page of equations as their
+//! source being a better answer than no page at all — and [`Pdf::fallback`]
+//! says so.
+//!
+//! Three things stop short of the page and are documented as such: a table cell
+//! written as AsciiDoc comes out empty; a passthrough is dropped, being HTML;
+//! and a cross reference to anything but a section keeps its words and loses
+//! its link, because Typst will not lay out a document that points at a label
+//! it cannot find.
 
 #![warn(clippy::print_stderr, clippy::print_stdout)]
 
