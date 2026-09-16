@@ -3,6 +3,82 @@
 Notable changes to `adocers` and the three crates it is built from. The
 versions are kept in step: all four are released together from one workspace.
 
+## 0.2.0
+
+A page can now be read as well as rendered: a listing offers to copy itself, a
+docked outline says where the reader is in the document, and a document written
+in a language other than English is typeset as one.
+
+### A page that helps the reader
+
+- **A copy button on every code block.** Selecting a listing by hand dragged
+  the callout marks along with it; what lands on the clipboard now is what the
+  reader would have selected, minus those marks — they are the page's
+  annotations, not the reader's code. The button is added by a small script
+  rather than rendered into the markup, so a listing's markup stays
+  Asciidoctor's byte for byte and a `--fragment` never carries a control its
+  host did not ask for. The script goes in only when the body has a verbatim
+  block in it. `--no-copy` leaves it out.
+- **A mark on the outline entry for the section being read.** Beside a long
+  document that is the difference between a list of links and a sense of place.
+  The entry marked is the one for the last heading scrolled past, which is the
+  only choice that moves in one direction as the page does. `--no-reading-mark`
+  leaves it out; with `--no-copy`, that is a page carrying no script at all.
+- **The outline is a column of entries rather than a boxed list**, on the page's
+  own ground, with a gutter held open down the side of each entry that only the
+  section being read draws in — so the mark has somewhere to go and nothing
+  moves when it arrives.
+- **An admonition is a box with a coloured edge** rather than an icon column
+  with a rule beside it. The edge carries the colour, so the block says what
+  kind of aside it is from across the page — without the icon having to be
+  large enough to read as one, and without a reader who does not separate those
+  five hues losing the boundary of the aside itself.
+
+### Documents not written in English
+
+The PDF back end never set Typst's `text(lang:)`, so Typst assumed English
+whatever `:lang:` said. The labels were already translated; the prose around
+them was still hyphenated by English patterns and quoted with English glyphs.
+AsciiDoc writes one BCP 47 tag where Typst takes the language and the region
+apart, so the tag is split — first subtag the language, a later two-letter one
+the region — and a tag Typst would not recognise is left out rather than passed
+on.
+
+`resources/showcase_de.adoc` is the showcase's question asked the other way
+round: not what `adocers` can render, but what moves when the document is not
+in English. It demonstrates the quotation marks Typst chooses and the patterns
+it hyphenates by, and names the two labels `adocers` does not translate.
+
+### The stylesheet, in the three parts a host needs
+
+`adocers-html` gains `stylesheet_variables()` and `document_stylesheet()`
+alongside the existing `default_stylesheet()`, which is unchanged and still
+composes all three.
+
+A host rendering a `--fragment` into a page of its own cannot use the whole
+stylesheet — the rules for `#header`, `#content` and the outline describe a page
+it is not making — but it must not write its own instead. A mermaid diagram this
+crate draws carries theme overrides written against the custom properties the
+stylesheet declares, looked up from inside the `<svg>`. A host that declared its
+own names for those colours leaves every override resolving to nothing and
+`fill` falling back to its initial value: a diagram of solid black boxes, with
+nothing in the page to say why. So the properties are handed out separately, to
+declare at the top level where a diagram can reach them, and the document's own
+rules separately, to nest under wherever the document goes. Every selector in
+the latter is a class this crate emits or an element inside a document.
+
+### Packaging
+
+`resources/` and `benches/` leave the published package: the corpus is what the
+benchmarks and the doctest suite read, not the crate. Both suites already skip
+what they cannot find. **7.1 MB to 129 KB.**
+
+Sibling crates are taken with `default-features = false` from the workspace
+entry rather than from each member, which newer cargo refuses to inherit. The
+resolved feature set is unchanged.
+
+Minimum supported Rust version is still **1.96**.
+
 ## 0.1.0
 
 First release.
