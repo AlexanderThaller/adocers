@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 /// which for a request path means it cannot name a file this server would
 /// serve.
 #[must_use]
-pub fn decode(encoded: &str) -> Option<String> {
+pub(super) fn decode(encoded: &str) -> Option<String> {
     let bytes = encoded.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut index = 0;
@@ -44,7 +44,7 @@ pub fn decode(encoded: &str) -> Option<String> {
 /// is always correct, and guessing which delimiters a browser will reinterpret
 /// is not.
 #[must_use]
-pub fn encode_segment(segment: &str) -> String {
+pub(super) fn encode_segment(segment: &str) -> String {
     let mut out = String::with_capacity(segment.len());
 
     for byte in segment.bytes() {

@@ -723,7 +723,7 @@ impl<'src> Renderer<'src> {
             // preformatted rather than flowed.
             let content = quote
                 .content()
-                .map(asciidoc_parser::content::Content::rendered_html)
+                .map(Content::rendered_html)
                 .unwrap_or_default();
             self.out
                 .line(&format!("<pre class=\"content\">{content}</pre>"));

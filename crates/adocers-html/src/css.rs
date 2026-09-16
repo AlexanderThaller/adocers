@@ -5,7 +5,7 @@
 //! reader who prefers a dark theme gets one.
 
 /// The built-in stylesheet.
-pub const DEFAULT: &str = r#"
+pub(crate) const DEFAULT: &str = r#"
 :root {
   color-scheme: light dark;
   --bg: #fdfdfd;

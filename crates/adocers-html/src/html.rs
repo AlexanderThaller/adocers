@@ -17,37 +17,37 @@ pub use adocers_render_core::escape::{
 /// output stays readable, and it knows how to write the `id`/`class` pair that
 /// every AsciiDoc block wrapper carries.
 #[derive(Debug, Default)]
-pub struct Buffer {
+pub(crate) struct Buffer {
     out: String,
 }
 
 impl Buffer {
     /// An empty buffer.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Append a raw fragment, which is assumed to already be valid markup.
-    pub fn raw(&mut self, markup: &str) {
+    pub(crate) fn raw(&mut self, markup: &str) {
         self.out.push_str(markup);
     }
 
     /// Append a raw fragment followed by a newline.
-    pub fn line(&mut self, markup: &str) {
+    pub(crate) fn line(&mut self, markup: &str) {
         self.out.push_str(markup);
         self.out.push('\n');
     }
 
     /// Drop a trailing newline, so that what comes next continues the line the
     /// buffer already ended.
-    pub fn unline(&mut self) {
+    pub(crate) fn unline(&mut self) {
         if self.out.ends_with('\n') {
             self.out.pop();
         }
     }
 
     /// Append a newline unless the buffer already ends with one.
-    pub fn newline(&mut self) {
+    pub(crate) fn newline(&mut self) {
         if !self.out.is_empty() && !self.out.ends_with('\n') {
             self.out.push('\n');
         }
@@ -58,7 +58,7 @@ impl Buffer {
     ///
     /// Empty class names are dropped, so callers can pass conditional classes
     /// without filtering them first.
-    pub fn open(&mut self, tag: &str, id: Option<&str>, classes: &[&str]) {
+    pub(crate) fn open(&mut self, tag: &str, id: Option<&str>, classes: &[&str]) {
         let tag = open_tag(tag, id, classes);
         self.line(&tag);
     }
@@ -67,18 +67,18 @@ impl Buffer {
     ///
     /// `content` is markup, not text: headings and titles have already been
     /// through inline substitution by the time they reach here.
-    pub fn element(&mut self, tag: &str, id: Option<&str>, classes: &[&str], content: &str) {
+    pub(crate) fn element(&mut self, tag: &str, id: Option<&str>, classes: &[&str], content: &str) {
         let open = open_tag(tag, id, classes);
         self.line(&format!("{open}{content}</{tag}>"));
     }
 
     /// Close an element opened with [`open`](Self::open).
-    pub fn close(&mut self, tag: &str) {
+    pub(crate) fn close(&mut self, tag: &str) {
         let _ = writeln!(self.out, "</{tag}>");
     }
 
     /// Consume the buffer and yield the markup.
-    pub fn finish(self) -> String {
+    pub(crate) fn finish(self) -> String {
         self.out
     }
 }

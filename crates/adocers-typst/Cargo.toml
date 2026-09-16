@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+keywords = ["asciidoc", "pdf", "typst", "typesetting", "documentation"]
+categories = ["text-processing"]
 
 [features]
 default = ["math", "mermaid"]

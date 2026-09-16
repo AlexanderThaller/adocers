@@ -9,7 +9,7 @@
 //! this does not know about still reads; it just reads plainly.
 
 /// Turn one run of rendered inline HTML into Typst markup.
-pub fn typst(html: &str) -> String {
+pub(crate) fn typst(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
 
@@ -86,10 +86,10 @@ fn element(tag: &str, rest: &mut &str) -> String {
 /// keep the bytes; this knows only about markup. So the picture is written as a
 /// marker — the source, the height it asked for and the words to fall back on,
 /// between two of a character no document contains.
-pub const PICTURE: &str = "\u{2}";
+pub(crate) const PICTURE: &str = "\u{2}";
 
 /// What separates the three things a picture's marker carries.
-pub const FIELD: &str = "\u{1}";
+pub(crate) const FIELD: &str = "\u{1}";
 
 /// One picture, as the marker the caller reads.
 fn picture(tag: &str) -> String {
@@ -204,7 +204,7 @@ fn take_until_close(name: &str, rest: &mut &str) -> String {
 /// Safe on verbatim content because the parser escapes the author's own angle
 /// brackets: a `<` still standing is the start of markup the renderer added,
 /// such as the `<b class="conum">` of a callout.
-pub fn text(html: &str) -> String {
+pub(crate) fn text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
 
@@ -226,7 +226,7 @@ pub fn text(html: &str) -> String {
 /// A page can leave `&#8594;` alone because a browser reads it; a PDF has no
 /// such reader, so every numeric reference is resolved here, along with the
 /// handful of named ones AsciiDoc emits.
-pub fn unescape(text: &str) -> String {
+pub(crate) fn unescape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
 
@@ -323,7 +323,7 @@ fn escape(html: &str) -> String {
 ///
 /// Line breaks are escaped rather than written, so a whole listing can be one
 /// literal without its own shape ending it.
-pub fn string(text: &str) -> String {
+pub(crate) fn string(text: &str) -> String {
     let escaped = text
         .replace('\\', "\\\\")
         .replace('"', "\\\"")

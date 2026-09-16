@@ -10,6 +10,8 @@
 //! Everything here is about the *document*, not about either output format —
 //! which is why both back ends can read it and why a third one could.
 
+#![warn(clippy::print_stderr, clippy::print_stdout)]
+
 pub mod escape;
 pub mod icons;
 #[cfg(feature = "mermaid")]

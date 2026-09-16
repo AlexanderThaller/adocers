@@ -40,15 +40,29 @@ typst-as-lib = { version = "0.16", features = [
 typst-pdf = "0.15"
 
 [workspace.lints.rust]
-#missing_docs = "warn"
+missing_docs = "warn"
 missing_debug_implementations = "warn"
+missing_copy_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "forbid"
+# A `pub` item nothing outside the crate can reach is not API, it only looks
+# like it — and on a published crate that is a promise nobody meant to make.
+unreachable_pub = "warn"
 unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+# The back ends are published, so their documentation is read by people who
+# cannot see the source beside it.
+[workspace.lints.rustdoc]
+missing_crate_level_docs = "warn"
+# An unclosed backtick silently swallows the rest of the line, which is easy to
+# miss in comments written as prose.
+unescaped_backticks = "warn"
 
 [workspace.lints.clippy]
 allow_attributes = "warn"
 allow_attributes_without_reason = "warn"
+cargo_common_metadata = "warn"
 dbg_macro = "warn"
 pedantic = { level = "warn", priority = -1 }
 todo = "warn"
@@ -67,6 +81,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
+keywords = ["asciidoc", "html", "pdf", "asciidoctor", "cli"]
+categories = ["command-line-utilities", "text-processing"]
 
 [features]
 default = ["serve", "highlight", "math", "mermaid", "pdf"]

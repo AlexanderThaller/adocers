@@ -256,13 +256,17 @@ impl Parsed {
 ///
 /// The PDF back end keeps options of its own: a stylesheet and a fragment mean
 /// nothing to a printed page. Only the half both back ends read crosses over.
+///
+/// It has no console to complain to either, so when it has had to typeset the
+/// document differently than it was asked to it says so in its answer, and
+/// saying it out loud is this end's job.
 #[cfg(feature = "pdf")]
 fn typeset(
     document: &asciidoc_parser::Document<'_>,
     base: &Path,
     options: &Options,
 ) -> Result<Vec<u8>> {
-    adocers_typst::pdf(
+    let pdf = adocers_typst::pdf(
         document,
         base,
         &adocers_typst::Options {
@@ -271,7 +275,13 @@ fn typeset(
             mermaid: options.mermaid,
             math: options.math,
         },
-    )
+    )?;
+
+    if let Some(fallback) = pdf.fallback {
+        eprintln!("adocers: {fallback}");
+    }
+
+    Ok(pdf.bytes)
 }
 
 /// Refuse politely: no typesetter is compiled in.

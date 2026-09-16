@@ -18,13 +18,13 @@
 
 /// The handlers `mitex`'s output calls for, defined once at the top of a
 /// document.
-pub const PRELUDE: &str = include_str!("math.typ");
+pub(crate) const PRELUDE: &str = include_str!("math.typ");
 
 /// Translate one LaTeX equation to Typst mathematics.
 ///
 /// `None` when `mitex` cannot read it — an unknown command, or something that
 /// is not LaTeX at all — which leaves the caller to show the source.
-pub fn typst(source: &str) -> Option<String> {
+pub(crate) fn typst(source: &str) -> Option<String> {
     let source = source.trim();
 
     if source.is_empty() {

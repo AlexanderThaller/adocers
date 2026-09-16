@@ -25,7 +25,7 @@ use math_core::{
 
 /// Which notation an equation is written in.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Notation {
+pub(crate) enum Notation {
     /// What a plain `:stem:` means, and what `[asciimath]` says outright.
     AsciiMath,
 
@@ -37,7 +37,7 @@ pub enum Notation {
 ///
 /// The result is a complete `<math>` element, laid out as a displayed equation
 /// rather than one sitting in a line of text.
-pub fn mathml(source: &str, notation: Notation) -> Option<String> {
+pub(crate) fn mathml(source: &str, notation: Notation) -> Option<String> {
     let source = source.trim();
 
     if source.is_empty() {
@@ -70,7 +70,7 @@ fn convert(source: &str, notation: Notation, display: MathDisplay) -> Option<Str
 ///
 /// Verbatim blocks are left alone. A listing showing `\(` means it, and
 /// rewriting it would be changing what the author wrote.
-pub fn inline(html: &str) -> String {
+pub(crate) fn inline(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
 

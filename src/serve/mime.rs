@@ -10,7 +10,7 @@ use std::path::Path;
 
 /// The content type to serve `path` with.
 #[must_use]
-pub fn of(path: &Path) -> &'static str {
+pub(super) fn of(path: &Path) -> &'static str {
     let Some(extension) = path.extension().and_then(|extension| extension.to_str()) else {
         return "application/octet-stream";
     };
@@ -60,7 +60,7 @@ pub fn of(path: &Path) -> &'static str {
 
 // What counts as an AsciiDoc document is the same question here as it is when
 // `check` walks a directory, so it is answered in one place.
-pub use crate::inputs::{
+pub(super) use crate::inputs::{
     DOCUMENT_EXTENSIONS,
     is_asciidoc,
 };

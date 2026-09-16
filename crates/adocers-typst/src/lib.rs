@@ -25,6 +25,8 @@
 //! a section keeps its words and loses its link, because Typst will not lay out
 //! a document that points at a label it cannot find.
 
+#![warn(clippy::print_stderr, clippy::print_stdout)]
+
 #[cfg(feature = "math")]
 mod ascii;
 mod inline;
@@ -69,7 +71,7 @@ use crate::inline::{
 /// These are the switches the HTML back end reads too, minus the ones that only
 /// a web page has: a PDF has no stylesheet to embed and is never a fragment of
 /// something larger.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "these mirror command line flags, and one field per flag is what reads clearly"
@@ -92,15 +94,38 @@ pub struct Options {
     pub math: bool,
 }
 
+/// A typeset PDF, and anything the caller ought to be told about how it was
+/// made.
+#[derive(Clone, Debug)]
+pub struct Pdf {
+    /// The PDF itself.
+    pub bytes: Vec<u8>,
+
+    /// Why the document was not typeset the way it was asked for, if it was
+    /// not.
+    ///
+    /// Set when an equation could not be typeset and every equation was shown
+    /// as its source instead — a page of equations as their source being a far
+    /// better answer than no page at all. A caller with somewhere to put a
+    /// diagnostic should say so; one without can drop it.
+    pub fallback: Option<String>,
+}
+
 /// Render `document` as a PDF.
 ///
 /// `base` is the directory the document was read from, which is where the
 /// images it names are looked for.
-pub fn pdf(document: &Document<'_>, base: &Path, options: &Options) -> Result<Vec<u8>> {
+pub fn pdf(document: &Document<'_>, base: &Path, options: &Options) -> Result<Pdf> {
     let (source, images) = markup(document, base, options);
 
     let error = match compile(&source, &images) {
-        Ok(bytes) => return Ok(bytes),
+        Ok(bytes) => {
+            return Ok(Pdf {
+                bytes,
+                fallback: None,
+            });
+        }
+
         Err(error) => error,
     };
 
@@ -115,20 +140,19 @@ pub fn pdf(document: &Document<'_>, base: &Path, options: &Options) -> Result<Ve
 
     let plain = Options {
         math: false,
-        ..options.clone()
+        ..*options
     };
 
     let (source, images) = markup(document, base, &plain);
 
     match compile(&source, &images) {
-        Ok(bytes) => {
-            eprintln!(
-                "adocers: an equation could not be typeset, so every equation is shown as its \
-                 source ({error:#})"
-            );
-
-            Ok(bytes)
-        }
+        Ok(bytes) => Ok(Pdf {
+            bytes,
+            fallback: Some(format!(
+                "an equation could not be typeset, so every equation is shown as its source \
+                 ({error:#})"
+            )),
+        }),
 
         // The mathematics was not the trouble; report what actually went wrong.
         Err(_) => Err(error),
@@ -141,14 +165,14 @@ pub fn markup(
     base: &Path,
     options: &Options,
 ) -> (String, Vec<(String, Vec<u8>)>) {
-    let mut out = Preamble::new(document, options).to_string();
+    let mut out = Preamble::new(document, *options).to_string();
 
     let mut emitter = Emitter {
         out: String::new(),
         base: base.to_path_buf(),
         images: Vec::new(),
         toc: Toc::of(document),
-        options: options.clone(),
+        options: *options,
         stem: attribute(document, "stem"),
         figure: attribute(document, "figure-caption"),
         figures: 0,
@@ -241,7 +265,7 @@ const CALLOUT: &str = "#let adoccallout(n) = if n <= 10 { str.from-unicode(0x277
 /// in the document's catalogue, so the texts are written out once here and each
 /// reference calls for the one it wants. Typst then puts it at the foot of
 /// whichever page the reference landed on and numbers it itself.
-fn footnotes(document: &Document<'_>, options: &Options) -> String {
+fn footnotes(document: &Document<'_>, options: Options) -> String {
     let texts: Vec<String> = document
         .catalog()
         .footnotes()
@@ -512,7 +536,7 @@ fn asciimath(_source: &str) -> Option<String> {
 struct Preamble(String);
 
 impl Preamble {
-    fn new(document: &Document<'_>, options: &Options) -> Self {
+    fn new(document: &Document<'_>, options: Options) -> Self {
         let mut out = String::new();
 
         let title = document
@@ -1986,9 +2010,16 @@ mod tests {
         let mut parser = Parser::default();
         let document = parser.parse("= T\n:stem: latexmath\n\n[stem]\n++++\n\\hbar\\omega\n++++\n");
 
-        let bytes = pdf(&document, Path::new("."), &options()).expect("still makes a PDF");
+        let pdf = pdf(&document, Path::new("."), &options()).expect("still makes a PDF");
 
-        assert!(bytes.starts_with(b"%PDF"), "should be a PDF");
+        assert!(pdf.bytes.starts_with(b"%PDF"), "should be a PDF");
+
+        // The caller has to be able to tell that it did not get what it asked
+        // for; this back end has nowhere to say so but its answer.
+        assert!(
+            pdf.fallback.is_some_and(|said| said.contains("equation")),
+            "the fallback should be reported"
+        );
     }
 
     #[test]
@@ -1996,9 +2027,10 @@ mod tests {
         let mut parser = Parser::default();
         let document = parser.parse("= Title\n\n== Section\n\nProse with *bold*.\n\n* a\n* b\n");
 
-        let bytes = pdf(&document, Path::new("."), &options()).expect("compiles");
+        let pdf = pdf(&document, Path::new("."), &options()).expect("compiles");
 
-        assert!(bytes.starts_with(b"%PDF"), "should be a PDF");
-        assert!(bytes.len() > 1000, "should have content");
+        assert!(pdf.bytes.starts_with(b"%PDF"), "should be a PDF");
+        assert!(pdf.bytes.len() > 1000, "should have content");
+        assert!(pdf.fallback.is_none(), "nothing should have been given up");
     }
 }

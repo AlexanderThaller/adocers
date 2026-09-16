@@ -61,6 +61,16 @@ Prose in comments and docs is written as full sentences. Match it.
   `#[expect(lint, reason = "…")]`, never a bare `#[allow]`.
 - `.clippy.toml` disallows `str::eq_ignore_ascii_case` and
   `str::to_ascii_lowercase` — "Always use unicode methods."
+- `missing_docs` and `unreachable_pub` warn, so anything `pub` is documented
+  *and* actually reachable. Reach for `pub(crate)` first and widen only when
+  something outside the crate needs it.
+
+A crate cannot merge `[lints] workspace = true` with a local `[lints]` table —
+the manifest fails to load. Per-crate lints go in `lib.rs` as `#![warn(…)]`,
+which is where the three libraries forbid themselves a console:
+`clippy::print_stderr` and `print_stdout`. A library has no business writing to
+a stream its caller does not control; hand the caller something to report
+instead, as `adocers_typst::Pdf::fallback` does.
 
 ## Tests
 

@@ -36,7 +36,7 @@ struct Entry {
 /// `url_path` is the request path with its trailing slash, so that links are
 /// relative to it and the breadcrumb can be built from its segments. `hidden`
 /// says whether entries whose name begins with a dot are listed.
-pub fn page(
+pub(super) fn page(
     directory: &Path,
     url_path: &str,
     hidden: bool,

@@ -61,7 +61,7 @@ const CAPTURES: &[(&str, &str)] = &[
 /// Returns `None` when the language is not one of the compiled-in grammars, or
 /// when the source defeats the parser — in both cases the caller falls back to
 /// plain escaped text, which is what an unhighlighted listing has always been.
-pub fn highlight(language: &str, source: &str) -> Option<String> {
+pub(crate) fn highlight(language: &str, source: &str) -> Option<String> {
     let configuration = grammar(language)?;
 
     let mut highlighter = Highlighter::new();

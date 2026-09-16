@@ -34,6 +34,8 @@
 //! against Asciidoctor's, and `KNOWN_FAILURES` there is the whole of what does
 //! not match yet.
 
+#![warn(clippy::print_stderr, clippy::print_stdout)]
+
 mod block;
 mod callout;
 mod css;

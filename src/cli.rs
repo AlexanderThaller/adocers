@@ -264,7 +264,7 @@ impl ServeArgs {
         if self.index_files.is_empty() {
             return DEFAULT_INDEX_FILES
                 .iter()
-                .map(std::string::ToString::to_string)
+                .map(ToString::to_string)
                 .collect();
         }
 

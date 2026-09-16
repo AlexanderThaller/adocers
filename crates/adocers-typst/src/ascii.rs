@@ -40,7 +40,7 @@ use asciimath_rs::{
 ///
 /// `None` for an equation that comes back empty, which is what a parse that
 /// found nothing it understood looks like.
-pub fn typst(source: &str) -> Option<String> {
+pub(crate) fn typst(source: &str) -> Option<String> {
     let source = source.trim();
 
     if source.is_empty() {

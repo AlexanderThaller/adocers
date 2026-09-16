@@ -16,7 +16,7 @@ use std::fmt::Write as _;
 
 /// A callout marker, and the line it was found on.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Callout {
+pub(crate) struct Callout {
     /// Zero-based index of the line the marker ended.
     pub line: usize,
 
@@ -35,7 +35,7 @@ const CONUM_OPEN: &str = "<b class=\"conum\">(";
 /// callout written in a form this module does not scan for, or a `<1>` in the
 /// code that the parser did not take as a marker — which tells the caller to
 /// leave the block to the parser rather than guess.
-pub fn locate(source: &str, rendered: &str) -> Option<Vec<Callout>> {
+pub(crate) fn locate(source: &str, rendered: &str) -> Option<Vec<Callout>> {
     let found = scan(source);
     let expected = parsed(rendered);
 
@@ -52,7 +52,7 @@ pub fn locate(source: &str, rendered: &str) -> Option<Vec<Callout>> {
 }
 
 /// Remove the markers, so that the highlighter sees only code.
-pub fn strip(source: &str, callouts: &[Callout]) -> String {
+pub(crate) fn strip(source: &str, callouts: &[Callout]) -> String {
     if callouts.is_empty() {
         return source.to_string();
     }
@@ -81,7 +81,7 @@ pub fn strip(source: &str, callouts: &[Callout]) -> String {
 /// A marker goes at the very end of its line, outside whatever spans the
 /// highlighter opened, which is where it was in the source and where a reader
 /// looks for it.
-pub fn reapply(highlighted: &str, callouts: &[Callout]) -> String {
+pub(crate) fn reapply(highlighted: &str, callouts: &[Callout]) -> String {
     if callouts.is_empty() {
         return highlighted.to_string();
     }
@@ -106,7 +106,7 @@ pub fn reapply(highlighted: &str, callouts: &[Callout]) -> String {
 /// stylesheet draws the first and hides the second — this one with a circle of
 /// its own, Asciidoctor's with a Font Awesome glyph — and a page with no
 /// stylesheet at all still reads, because the text form is still there.
-pub fn iconize(html: &str) -> String {
+pub(crate) fn iconize(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
 

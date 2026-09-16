@@ -54,13 +54,13 @@ const IGNORED: &[&str] = &["target", "node_modules"];
 const MAX_WAIT: Duration = Duration::from_secs(20);
 
 /// The path the reload script asks about changes on.
-pub const ENDPOINT: &str = "/__adocers/reload";
+pub(super) const ENDPOINT: &str = "/__adocers/reload";
 
 /// Reads the change counter and waits for it to move.
 ///
 /// Cheap to clone, and shared by every request handler.
 #[derive(Clone, Debug)]
-pub struct Reload {
+pub(super) struct Reload {
     /// Owns the counter; receivers are taken from it as they are needed.
     sender: watch::Sender<u64>,
 }
@@ -71,13 +71,13 @@ pub struct Reload {
 /// of the server and dropping it stops the watch, whereas [`Reload`] is copied
 /// into every request that needs it.
 #[derive(Debug)]
-pub struct Watch {
+pub(super) struct Watch {
     /// Stops watching when dropped.
     _debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
 }
 
 /// Start watching `root`, returning the shared handle and the watch's guard.
-pub fn start(root: &Path) -> Result<(Reload, Watch)> {
+pub(super) fn start(root: &Path) -> Result<(Reload, Watch)> {
     let watched = root.to_path_buf();
     let (sender, _) = watch::channel(0_u64);
     let notified = sender.clone();
@@ -147,14 +147,14 @@ fn is_ignored(path: &Path, root: &Path) -> bool {
 
 impl Reload {
     /// The current value of the change counter.
-    pub fn generation(&self) -> u64 {
+    pub(super) fn generation(&self) -> u64 {
         *self.sender.borrow()
     }
 
     /// Wait until the counter differs from `seen`, then return its new value.
     ///
     /// Returns the unchanged value if nothing happened within [`MAX_WAIT`].
-    pub async fn wait_for_change(&self, seen: u64) -> u64 {
+    pub(super) async fn wait_for_change(&self, seen: u64) -> u64 {
         let mut receiver = self.sender.subscribe();
 
         // The change may already have happened between the page rendering and
@@ -177,7 +177,7 @@ impl Reload {
 /// `generation` is the counter's value at the moment the page was rendered, so
 /// a change that lands between rendering and the script's first request is
 /// still noticed.
-pub fn script(generation: u64) -> String {
+pub(super) fn script(generation: u64) -> String {
     format!(
         r#"<script>
 (function () {{

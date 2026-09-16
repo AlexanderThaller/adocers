@@ -854,10 +854,16 @@ let pdf = adocers_typst::pdf(&document, std::path::Path::new("."), &adocers_typs
     math: true,
     ..adocers_typst::Options::default()
 })?;
+
+let bytes = pdf.bytes;
 ----
 
 `adocers-typst` needs a base directory because a document names its
-images relative to where it was read from.
+images relative to where it was read from. It returns a `Pdf` rather
+than the bytes alone because it has no console to complain to: when an
+equation will not typeset it shows every equation as its source instead
+and says so in `pdf.fallback`, for a caller that has somewhere to put a
+diagnostic.
 
 == Benchmarks and profiling
 
