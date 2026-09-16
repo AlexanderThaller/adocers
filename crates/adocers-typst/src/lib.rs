@@ -9,7 +9,9 @@
 //! walks the block tree emitting markup, and so does this, but Typst is not
 //! HTML and almost nothing is shared between them — the exception being inline
 //! content, which the parser hands over as HTML whatever is going to be done
-//! with it. [`inline`] translates that.
+//! with it. `inline` translates that. What the two back ends genuinely agree
+//! on — section numbers, header metadata, admonition icons, mermaid diagrams —
+//! lives in [`adocers_render_core`], which neither of them owns.
 //!
 //! What it covers is the shape of an ordinary document: headings, paragraphs,
 //! lists, tables, listings, quotes, admonitions, images, diagrams, footnotes
@@ -55,13 +57,40 @@ use asciidoc_parser::{
     document::TocMode,
 };
 
-use crate::render::{
-    Options,
-    typst::inline::{
-        string,
-        typst as inline_markup,
-    },
+use adocers_render_core::numbering::Numbering;
+
+use crate::inline::{
+    string,
+    typst as inline_markup,
 };
+
+/// What a PDF shows beyond the document's own content.
+///
+/// These are the switches the HTML back end reads too, minus the ones that only
+/// a web page has: a PDF has no stylesheet to embed and is never a fragment of
+/// something larger.
+#[derive(Clone, Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "these mirror command line flags, and one field per flag is what reads clearly"
+)]
+pub struct Options {
+    /// Whether an admonition is marked with an icon rather than its label, and
+    /// a callout with a circled number rather than the parser's `(1)`.
+    pub icons: bool,
+
+    /// Whether a source block is syntax highlighted, by Typst's own
+    /// highlighter.
+    pub highlight: bool,
+
+    /// Whether a mermaid block is drawn as a diagram, or left as the listing
+    /// block it was written as.
+    pub mermaid: bool,
+
+    /// Whether an equation is typeset, or shown as the notation it was written
+    /// in.
+    pub math: bool,
+}
 
 /// Render `document` as a PDF.
 ///
@@ -123,7 +152,7 @@ pub fn markup(
         stem: attribute(document, "stem"),
         figure: attribute(document, "figure-caption"),
         figures: 0,
-        numbering: crate::render::numbering::Numbering::of(document),
+        numbering: Numbering::of(document),
     };
 
     // An outline placed above the content goes between the title block and the
@@ -359,7 +388,7 @@ fn details(document: &Document<'_>) -> String {
     for attribute in document.header().attributes() {
         let name = attribute.name().data();
 
-        let Some(shown) = crate::render::displayed_as(name) else {
+        let Some(shown) = adocers_render_core::metadata::displayed_as(name) else {
             continue;
         };
 
@@ -374,7 +403,7 @@ fn details(document: &Document<'_>) -> String {
         let _ = writeln!(
             out,
             "*{}:* {}\\",
-            crate::render::label_for(shown),
+            adocers_render_core::metadata::label_for(shown),
             inline_markup(value)
         );
     }
@@ -583,7 +612,7 @@ struct Emitter {
 
     /// What each section shows in front of its title, so a PDF and a page
     /// number the same document the same way.
-    numbering: crate::render::numbering::Numbering,
+    numbering: Numbering,
 }
 
 /// The table of contents a document asked for.
@@ -955,7 +984,7 @@ impl Emitter {
             return false;
         }
 
-        let Some(svg) = crate::render::mermaid::printable(content) else {
+        let Some(svg) = adocers_render_core::mermaid::printable(content) else {
             return false;
         };
 
@@ -1134,7 +1163,7 @@ impl Emitter {
         let path = format!("/icon-{name}.svg");
 
         if !self.images.iter().any(|(known, _)| *known == path) {
-            let svg = crate::render::icons::admonition(name, label)?
+            let svg = adocers_render_core::icons::admonition(name, label)?
                 .replace("currentColor", admonition_colour(name));
 
             self.images.push((path.clone(), svg.into_bytes()));
@@ -1750,7 +1779,6 @@ mod tests {
             highlight: true,
             mermaid: true,
             math: true,
-            ..Options::default()
         }
     }
 

@@ -1,0 +1,21 @@
+[package]
+name = "adocers-render-core"
+description = "What the adocers AsciiDoc back ends have in common: section numbering, header metadata, admonition icons and mermaid diagrams"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["mermaid"]
+
+# Draw mermaid diagrams, with `merman`. Without it a back end has nothing to
+# draw one with and renders the listing block it was written as.
+mermaid = ["dep:merman"]
+
+[dependencies]
+asciidoc-parser.workspace = true
+merman = { workspace = true, optional = true }
+
+[lints]
+workspace = true

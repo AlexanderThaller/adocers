@@ -253,13 +253,25 @@ impl Parsed {
 }
 
 /// Typeset a document as a PDF.
+///
+/// The PDF back end keeps options of its own: a stylesheet and a fragment mean
+/// nothing to a printed page. Only the half both back ends read crosses over.
 #[cfg(feature = "pdf")]
 fn typeset(
     document: &asciidoc_parser::Document<'_>,
     base: &Path,
     options: &Options,
 ) -> Result<Vec<u8>> {
-    render::typst::pdf(document, base, options)
+    adocers_typst::pdf(
+        document,
+        base,
+        &adocers_typst::Options {
+            icons: options.icons,
+            highlight: options.highlight,
+            mermaid: options.mermaid,
+            math: options.math,
+        },
+    )
 }
 
 /// Refuse politely: no typesetter is compiled in.

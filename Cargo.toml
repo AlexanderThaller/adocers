@@ -1,9 +1,72 @@
-[package]
-name = "adocers"
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
-description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/AlexanderThaller/adocers"
+
+[workspace.dependencies]
+adocers-html = { version = "0.1", path = "crates/adocers-html" }
+adocers-render-core = { version = "0.1", path = "crates/adocers-render-core" }
+adocers-typst = { version = "0.1", path = "crates/adocers-typst" }
+anyhow = "1"
+asciidoc-parser = "0.31"
+asciimath-rs = "0.6.2"
+math-core = "0.8.2"
+merman = { version = "0.8.0-alpha.6", features = ["svg"] }
+mitex = "0.2"
+tree-sitter = "0.27"
+tree-sitter-bash = "0.25"
+tree-sitter-c = "0.24"
+tree-sitter-css = "0.25"
+tree-sitter-go = "0.25"
+tree-sitter-highlight = "0.27"
+tree-sitter-html = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-json = "0.24"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-toml-ng = "0.7"
+tree-sitter-typescript = "0.23"
+tree-sitter-yaml = "0.7"
+typst = "0.15"
+typst-as-lib = { version = "0.16", features = [
+  "typst-kit-fonts",
+  "typst-kit-embed-fonts",
+] }
+typst-pdf = "0.15"
+
+[workspace.lints.rust]
+#missing_docs = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "forbid"
+unused_lifetimes = "warn"
+
+[workspace.lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+dbg_macro = "warn"
+pedantic = { level = "warn", priority = -1 }
+todo = "warn"
+unwrap_used = "warn"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+# The back ends return owned markup and owned bytes: dropping either is a
+# mistake the type system cannot see, but saying so on every function that
+# returns a `String` is noise rather than a warning anyone reads.
+must_use_candidate = "allow"
+
+[package]
+name = "adocers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
 
 [features]
 default = ["serve", "highlight", "math", "mermaid", "pdf"]
@@ -11,51 +74,32 @@ serve = ["dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower-http"]
 
 # Draw mermaid diagrams, with `merman`. Without it a diagram renders as the
 # listing block it was written as.
-mermaid = ["dep:merman"]
+mermaid = ["adocers-html/mermaid", "adocers-typst?/mermaid"]
 
 # PDF output, typeset by Typst — which is Rust, so a PDF needs no LaTeX, no
 # headless browser and nothing fetched. Typst's own fonts come with it.
-# `mitex` belongs to this back end rather than to `math`: it translates LaTeX
-# to Typst's own mathematics, which only a PDF has any use for.
-pdf = ["dep:mitex", "dep:typst", "dep:typst-as-lib", "dep:typst-pdf"]
+pdf = ["dep:adocers-typst"]
 
 # Equations, converted to MathML for the browser to draw. Without it an
 # equation renders as the notation it was written in — in a PDF too, since this
 # is the switch that says whether equations are converted at all.
-math = ["dep:math-core", "dep:asciimath-rs"]
+math = ["adocers-html/math", "adocers-typst?/math"]
 
 # Syntax highlighting, and the grammars it parses with.
-highlight = [
-  "dep:tree-sitter",
-  "dep:tree-sitter-highlight",
-  "dep:tree-sitter-rust",
-  "dep:tree-sitter-python",
-  "dep:tree-sitter-javascript",
-  "dep:tree-sitter-typescript",
-  "dep:tree-sitter-go",
-  "dep:tree-sitter-c",
-  "dep:tree-sitter-bash",
-  "dep:tree-sitter-json",
-  "dep:tree-sitter-toml-ng",
-  "dep:tree-sitter-yaml",
-  "dep:tree-sitter-html",
-  "dep:tree-sitter-css",
-  "dep:tree-sitter-java",
-]
+highlight = ["adocers-html/highlight"]
 tower-http = ["dep:tower-http"]
 
 [dependencies]
-anyhow = "1"
+adocers-html = { workspace = true, default-features = false }
+adocers-typst = { workspace = true, default-features = false, optional = true }
+anyhow.workspace = true
 ariadne = "0.6"
-asciidoc-parser = "0.31"
-asciimath-rs = { version = "0.6.2", optional = true }
+asciidoc-parser.workspace = true
 axum = { version = "0.8", default-features = false, features = [
   "http1",
   "tokio",
 ], optional = true }
 clap = { version = "4", features = ["derive"] }
-math-core = { version = "0.8.2", optional = true }
-merman = { version = "0.8.0-alpha.6", features = ["svg"], optional = true }
 notify-debouncer-full = "0.7"
 serde_json = "1"
 tokio = { version = "1", default-features = false, features = [
@@ -73,49 +117,16 @@ tower-http = { version = "0.7", features = [
   "compression-gzip",
   "compression-br",
 ], optional = true }
-tree-sitter = { version = "0.27", optional = true }
-tree-sitter-bash = { version = "0.25", optional = true }
-tree-sitter-c = { version = "0.24", optional = true }
-tree-sitter-css = { version = "0.25", optional = true }
-tree-sitter-go = { version = "0.25", optional = true }
-tree-sitter-highlight = { version = "0.27", optional = true }
-tree-sitter-html = { version = "0.23", optional = true }
-tree-sitter-java = { version = "0.23", optional = true }
-tree-sitter-javascript = { version = "0.25", optional = true }
-tree-sitter-json = { version = "0.24", optional = true }
-tree-sitter-python = { version = "0.25", optional = true }
-tree-sitter-rust = { version = "0.24", optional = true }
-tree-sitter-toml-ng = { version = "0.7", optional = true }
-tree-sitter-typescript = { version = "0.23", optional = true }
-tree-sitter-yaml = { version = "0.7", optional = true }
-mitex = { version = "0.2", optional = true }
-typst = { version = "0.15", optional = true }
-typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"], optional = true }
-typst-pdf = { version = "0.15", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]
 name = "render"
 harness = false
 
-[lints.rust]
-#missing_docs = "warn"
-missing_debug_implementations = "warn"
-rust_2018_idioms = { level = "warn", priority = -1 }
-unsafe_code = "forbid"
-unused_lifetimes = "warn"
-
-[lints.clippy]
-allow_attributes = "warn"
-allow_attributes_without_reason = "warn"
-dbg_macro = "warn"
-pedantic = { level = "warn", priority = -1 }
-todo = "warn"
-unwrap_used = "warn"
-missing_panics_doc = "allow"
-missing_errors_doc = "allow"
-# The library target exists so the benchmarks can reach the code; it is not an
-# API anyone depends on, so it is not held to one.
-must_use_candidate = "allow"
+[lints]
+workspace = true
 
 [profile.deploy]
 inherits = "release"
@@ -123,6 +134,3 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
-
-[dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }

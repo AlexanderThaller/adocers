@@ -18,7 +18,7 @@ use asciidoc_parser::blocks::{
     VerticalAlignment,
 };
 
-use crate::render::{
+use crate::{
     Renderer,
     html::escape_attr,
 };

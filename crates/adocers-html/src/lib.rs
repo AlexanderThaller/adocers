@@ -1,37 +1,38 @@
-//! The HTML5 back end.
+//! The HTML5 back end for AsciiDoc.
 //!
 //! `asciidoc-parser` renders *inline* content — bold, links, cross-references,
 //! passthroughs — but deliberately stops there: turning the block tree into a
-//! page is the back end's job, and this module is that back end. The markup it
+//! page is the back end's job, and this crate is that back end. The markup it
 //! emits follows Asciidoctor's HTML5 converter (the same wrapper `div`s and
 //! class names), so stylesheets written for Asciidoctor apply unchanged.
 //!
 //! # A back end we could adopt instead
 //!
 //! [`asciidoc-html5`](https://github.com/asciidoc-rs/asciidoc-html5) is the
-//! parser author's own HTML5 back end, and it covers what this module covers:
+//! parser author's own HTML5 back end, and it covers what this crate covers:
 //! rendered against `resources/showcase.adoc` the two agree on every wrapper
 //! and class name, and on constructs the showcase leaves out — video, audio,
 //! bibliographies, roles, hard breaks, passthroughs — they agree byte for byte.
 //! Both are bounded by the same parser, so neither is ahead on coverage.
 //!
-//! Adopting it would mean giving up what this module does *beyond* Asciidoctor,
+//! Adopting it would mean giving up what this crate does *beyond* Asciidoctor,
 //! with no supported way to add it back:
 //!
 //! - source blocks highlighted here rather than in the browser, which that
 //!   crate rules out ("client-side syntax highlighters only");
 //! - mermaid blocks turned into diagrams, which it renders as listings;
 //! - admonitions marked with an icon rather than a label;
-//! - the labelled document header ([`Renderer::details`]).
+//! - the labelled document header.
 //!
 //! Its README also rules out an extension mechanism before 1.0, so hooking
 //! those back in would mean rewriting its output rather than configuring it.
 //!
 //! It is worth revisiting if that changes — or if the long tail of Asciidoctor
 //! fidelity becomes more work than it is worth. That tail is now measured
-//! rather than guessed at: `tests/doctest.rs` renders Asciidoctor's own test
-//! corpus through this back end and compares the result against Asciidoctor's,
-//! and `KNOWN_FAILURES` there is the whole of what does not match yet.
+//! rather than guessed at: the workspace's `tests/doctest.rs` renders
+//! Asciidoctor's own test corpus through this back end and compares the result
+//! against Asciidoctor's, and `KNOWN_FAILURES` there is the whole of what does
+//! not match yet.
 
 mod block;
 mod callout;
@@ -40,18 +41,12 @@ mod html;
 
 #[cfg_attr(not(feature = "highlight"), path = "highlight_off.rs")]
 mod highlight;
-mod icons;
 mod list;
 #[cfg(feature = "math")]
 mod math;
 mod media;
-#[cfg(feature = "mermaid")]
-mod mermaid;
-pub(crate) mod numbering;
 mod table;
 mod toc;
-#[cfg(feature = "pdf")]
-pub mod typst;
 
 use asciidoc_parser::{
     Document,
@@ -62,8 +57,17 @@ use asciidoc_parser::{
     },
 };
 
-use crate::render::html::Buffer;
-pub use crate::render::html::{
+use adocers_render_core::{
+    metadata::{
+        displayed_as,
+        is_list,
+        label_for,
+    },
+    numbering::Numbering,
+};
+
+use crate::html::Buffer;
+pub use crate::html::{
     escape_attr,
     escape_text,
 };
@@ -125,7 +129,7 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         document,
         options,
         out: Buffer::new(),
-        numbering: numbering::Numbering::of(document),
+        numbering: Numbering::of(document),
         figures: 0,
         toc_rendered: false,
         #[cfg(feature = "mermaid")]
@@ -174,7 +178,7 @@ struct Renderer<'src> {
 
     /// What each section shows in front of its title, worked out up front so
     /// the outline and the headings cannot disagree about it.
-    numbering: numbering::Numbering,
+    numbering: Numbering,
 
     /// How many figures have been captioned, so each is numbered in turn.
     ///
@@ -524,7 +528,7 @@ impl Renderer<'_> {
     ///
     /// Used where a wrapper should only be written once its contents turn out
     /// to be worth wrapping.
-    pub(super) fn aside(&mut self, render: impl FnOnce(&mut Self)) -> String {
+    pub(crate) fn aside(&mut self, render: impl FnOnce(&mut Self)) -> String {
         let outer = std::mem::replace(&mut self.out, Buffer::new());
 
         render(self);
@@ -541,63 +545,9 @@ impl Renderer<'_> {
     }
 }
 
-/// Header attributes shown to the reader as facts about the document.
-///
-/// Everything else a header sets — `sectnums`, `icons`, `source-highlighter` —
-/// is an instruction to the renderer rather than something a reader wants to
-/// read, so the list is an allowlist: an attribute nobody thought about is left
-/// out rather than shown by accident.
-const METADATA: &[&str] = &[
-    "status",
-    "date",
-    "keywords",
-    "category",
-    "edition",
-    "organization",
-    "copyright",
-    // What a review says about itself — the range it looked at, what it read
-    // the changes against, how much it found — and what one of its findings
-    // says: which axis, how bad, of what kind, where, and on whose authority.
-    "fixed-point",
-    "head",
-    "diff",
-    "spec",
-    "standards",
-    "findings",
-    "axis",
-    "severity",
-    "kind",
-    "where",
-    "source",
-];
-
-/// Antora's namespace for page metadata. An attribute in it is shown with the
-/// prefix dropped, so `:page-tags:` reads as `Tags`.
-const PAGE_PREFIX: &str = "page-";
-
 /// One labelled line of the document header.
 fn detail(label: &str, value: &str) -> String {
     format!("<div class=\"detail\"><span class=\"label\">{label}:</span> {value}</div>\n")
-}
-
-/// The name an attribute is shown under, or `None` if it is not shown at all.
-fn displayed_as(name: &str) -> Option<&str> {
-    if let Some(rest) = name.strip_prefix(PAGE_PREFIX) {
-        return (!rest.is_empty()).then_some(rest);
-    }
-
-    METADATA.contains(&name).then_some(name)
-}
-
-/// The label for an attribute name: `page-last-reviewed` reads `Last reviewed`.
-fn label_for(name: &str) -> String {
-    let spaced = name.replace(['-', '_'], " ");
-    let mut characters = spaced.chars();
-
-    match characters.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
-        None => spaced,
-    }
 }
 
 /// The markup for an attribute's value.
@@ -617,11 +567,6 @@ fn value_for(name: &str, value: &str) -> String {
         .map(|tag| format!("<span class=\"tag\">{}</span>", escape_text(tag)))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// Whether an attribute's value is a comma-separated list of separate things.
-fn is_list(name: &str) -> bool {
-    matches!(name, "tags" | "keywords" | "standards")
 }
 
 /// Whether a TOC placement puts the outline above the document's content.

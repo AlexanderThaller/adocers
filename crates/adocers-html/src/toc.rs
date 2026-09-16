@@ -19,10 +19,11 @@ use asciidoc_parser::{
     },
 };
 
-use crate::render::{
+use adocers_render_core::numbering::Numbering;
+
+use crate::{
     Renderer,
     html::escape_attr,
-    numbering::Numbering,
 };
 
 /// One line of the outline, plus the lines nested beneath it.

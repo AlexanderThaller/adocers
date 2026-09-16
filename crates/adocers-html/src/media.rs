@@ -12,7 +12,7 @@ use asciidoc_parser::{
     },
 };
 
-use crate::render::{
+use crate::{
     Renderer,
     block,
     html::escape_attr,

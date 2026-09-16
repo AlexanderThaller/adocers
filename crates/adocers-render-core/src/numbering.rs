@@ -54,7 +54,8 @@ const ABSTRACT: &str = "abstract";
 ///
 /// Keyed by where a section begins in the source, which is a thing every
 /// section has exactly one of.
-pub(super) struct Numbering(HashMap<usize, String>);
+#[derive(Debug)]
+pub struct Numbering(HashMap<usize, String>);
 
 /// What the sections at one level of the walk are numbered from.
 enum From {
@@ -70,7 +71,7 @@ enum From {
 
 impl Numbering {
     /// Work out the numbering for a whole document.
-    pub(super) fn of(document: &Document<'_>) -> Self {
+    pub fn of(document: &Document<'_>) -> Self {
         let mut numbers = HashMap::new();
 
         let book = matches!(
@@ -93,7 +94,7 @@ impl Numbering {
     ///
     /// Empty for a section that shows no number, which is most of them in most
     /// documents.
-    pub(super) fn prefix(&self, section: &SectionBlock<'_>) -> String {
+    pub fn prefix(&self, section: &SectionBlock<'_>) -> String {
         self.0
             .get(&section.span().byte_offset())
             .cloned()
@@ -222,35 +223,51 @@ fn parser_prefix(section: &SectionBlock<'_>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use asciidoc_parser::Parser;
-
-    use crate::render::{
-        Options,
-        render,
+    use asciidoc_parser::{
+        Parser,
+        blocks::{
+            Block,
+            FindBlocks,
+        },
     };
 
-    /// The headings one document renders, number and all.
+    use super::*;
+
+    /// The headings one document shows, number and all.
+    ///
+    /// This walks the sections itself rather than reading the numbers back out
+    /// of a rendered page: the number in front of a title is what this module
+    /// decides, and a back end only writes it down.
     fn headings(source: &str) -> Vec<String> {
         let mut parser = Parser::default();
         let document = parser.parse(source);
+        let numbering = Numbering::of(&document);
+        let mut out = Vec::new();
 
-        let options = Options {
-            fragment: true,
-            ..Options::default()
-        };
+        walk(document.child_blocks(), &numbering, &mut out);
 
-        render(&document, &options)
-            .html
-            .lines()
-            .filter(|line| line.starts_with("<h"))
-            .map(|line| {
-                let text = line.split_once('>').map_or(line, |(_, rest)| rest);
+        out
+    }
 
-                text.split_once("</")
-                    .map_or(text, |(text, _)| text)
-                    .to_string()
-            })
-            .collect()
+    /// Append every section's heading, in the order a reader meets them.
+    fn walk<'src>(
+        blocks: impl Iterator<Item = &'src Block<'src>>,
+        numbering: &Numbering,
+        out: &mut Vec<String>,
+    ) {
+        for block in blocks {
+            let Block::Section(section) = block else {
+                continue;
+            };
+
+            out.push(format!(
+                "{}{}",
+                numbering.prefix(section),
+                section.section_title()
+            ));
+
+            walk(section.child_blocks(), numbering, out);
+        }
     }
 
     #[test]

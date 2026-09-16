@@ -6,7 +6,7 @@
 //! from `currentColor`, so one rule per admonition type themes them and they
 //! follow the reader's light or dark scheme without a second set.
 
-use crate::render::html::escape_attr;
+use crate::escape::escape_attr;
 
 /// The icon drawn for an admonition, by its Asciidoctor context name.
 ///

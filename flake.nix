@@ -47,7 +47,8 @@
         };
 
       # The build reads the version from the manifest, so a release only has to
-      # be cut in one place.
+      # be cut in one place — `[workspace.package]`, which every crate in the
+      # workspace inherits.
       cargoToml = lib.importTOML ./Cargo.toml;
 
       # Everything the build needs, and nothing else — a rendered
@@ -62,6 +63,7 @@
         fileset = lib.fileset.unions [
           ./Cargo.toml
           ./Cargo.lock
+          ./crates
           ./src
           ./tests
           ./benches
@@ -79,7 +81,7 @@
         }:
         rustPlatform.buildRustPackage {
           pname = cargoToml.package.name;
-          inherit (cargoToml.package) version;
+          inherit (cargoToml.workspace.package) version;
 
           src = source;
 

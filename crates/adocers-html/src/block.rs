@@ -23,7 +23,9 @@ use asciidoc_parser::{
     content::Content,
 };
 
-use crate::render::{
+use adocers_render_core::icons;
+
+use crate::{
     Renderer,
     TocMode,
     callout,
@@ -33,7 +35,6 @@ use crate::render::{
         escape_text,
         open_tag_with,
     },
-    icons,
 };
 
 impl<'src> Renderer<'src> {
@@ -420,7 +421,7 @@ impl<'src> Renderer<'src> {
     fn drawn(&mut self, content: &str) -> Option<String> {
         self.drawings += 1;
 
-        crate::render::mermaid::svg(&unescape(content), &format!("diagram-{}", self.drawings))
+        adocers_render_core::mermaid::svg(&unescape(content), &format!("diagram-{}", self.drawings))
     }
 
     /// Never draws: `merman` is not compiled in.
@@ -436,7 +437,7 @@ impl<'src> Renderer<'src> {
     /// Convert a stem block to `MathML`, if this build can and it reads.
     #[cfg(feature = "math")]
     fn equation(&self, source: &str, block: &'src Block<'src>) -> Option<String> {
-        crate::render::math::mathml(source, self.notation(block))
+        crate::math::mathml(source, self.notation(block))
     }
 
     /// Never converts: no converter is compiled in.
@@ -455,8 +456,8 @@ impl<'src> Renderer<'src> {
     /// whatever `:stem:` was set to, which is `AsciiMath` unless it says
     /// otherwise.
     #[cfg(feature = "math")]
-    fn notation(&self, block: &'src Block<'src>) -> crate::render::math::Notation {
-        use crate::render::math::Notation;
+    fn notation(&self, block: &'src Block<'src>) -> crate::math::Notation {
+        use crate::math::Notation;
 
         match block.declared_style() {
             Some("latexmath") => return Notation::Latex,

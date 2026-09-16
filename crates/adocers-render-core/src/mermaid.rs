@@ -23,14 +23,13 @@
 //! A diagram bound for a PDF takes neither correction and one of its own: see
 //! [`printable`].
 
-#[cfg(feature = "pdf")]
-use merman::svg::SvgPipeline;
 use merman::{
     OperationControl,
     RenderOutput,
     RenderRequest,
     Renderer,
     SvgRequest,
+    svg::SvgPipeline,
 };
 
 /// The page's own colours, applied to the parts of a diagram that are chrome
@@ -243,7 +242,6 @@ pub fn svg(source: &str, id: &str) -> Option<String> {
 ///
 /// The colours are left as mermaid drew them. The page's palette follows the
 /// reader's colour scheme and a printed page has no reader to follow.
-#[cfg(feature = "pdf")]
 pub fn printable(source: &str) -> Option<String> {
     draw(
         source,
@@ -335,7 +333,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "pdf")]
     #[test]
     fn sets_a_printed_diagram_s_labels_in_svg() {
         let svg = printable("flowchart LR\n  A[one] --> B[two]").expect("renders");

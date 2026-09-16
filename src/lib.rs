@@ -1,9 +1,26 @@
-//! `adocers` — render AsciiDoc documents to HTML.
+//! `adocers` — render AsciiDoc documents to HTML or PDF.
 //!
 //! The command-line tool is a thin shell around this library: `src/main.rs`
 //! parses the arguments and calls [`run`]. Everything else lives here so that
 //! the benchmarks in `benches/` can reach it, since a benchmark can only link
 //! against a library target.
+//!
+//! The rendering itself is not here. It is two crates of its own — reusable by
+//! anything that wants an AsciiDoc document turned into something:
+//!
+//! - [`adocers_html`], the HTML5 back end, re-exported below as [`render`] for
+//!   the modules and benchmarks that grew up calling it that;
+//! - `adocers-typst`, which typesets a PDF.
+//!
+//! What the two agree on — section numbering, header metadata, admonition
+//! icons, mermaid diagrams — is `adocers-render-core`, which both depend on and
+//! neither owns.
+
+/// The HTML back end.
+///
+/// A re-export of [`adocers_html`], which used to be this crate's `render`
+/// module and is a crate of its own now.
+pub use adocers_html as render;
 
 pub mod cli;
 pub mod diagnostics;
@@ -11,7 +28,6 @@ pub mod includes;
 pub mod inputs;
 pub mod job;
 pub mod lint;
-pub mod render;
 #[cfg(feature = "serve")]
 pub mod serve;
 pub mod watch;

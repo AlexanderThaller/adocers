@@ -12,7 +12,7 @@ use asciidoc_parser::blocks::{
     SimpleBlockStyle,
 };
 
-use crate::render::{
+use crate::{
     Renderer,
     block,
     html::escape_attr,
@@ -367,7 +367,7 @@ fn html_list_type(style: &str) -> Option<&'static str> {
 mod tests {
     use asciidoc_parser::Parser;
 
-    use crate::render::{
+    use crate::{
         Options,
         render,
     };

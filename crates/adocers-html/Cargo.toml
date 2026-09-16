@@ -1,0 +1,64 @@
+[package]
+name = "adocers-html"
+description = "Render an AsciiDoc document to HTML, following Asciidoctor's HTML5 converter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["highlight", "math", "mermaid"]
+
+# Syntax highlighting, and the grammars it parses with. A source block still
+# carries its `language-…` class without it, so a page can be highlighted in
+# the browser instead.
+highlight = [
+  "dep:tree-sitter",
+  "dep:tree-sitter-highlight",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-javascript",
+  "dep:tree-sitter-typescript",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-c",
+  "dep:tree-sitter-bash",
+  "dep:tree-sitter-json",
+  "dep:tree-sitter-toml-ng",
+  "dep:tree-sitter-yaml",
+  "dep:tree-sitter-html",
+  "dep:tree-sitter-css",
+  "dep:tree-sitter-java",
+]
+
+# Equations, converted to MathML for the browser to draw. Without it an
+# equation renders as the notation it was written in.
+math = ["dep:math-core", "dep:asciimath-rs"]
+
+# Draw mermaid diagrams while the page is built, rather than shipping a drawing
+# module to the reader. Without it a diagram renders as the listing block it was
+# written as.
+mermaid = ["adocers-render-core/mermaid"]
+
+[dependencies]
+adocers-render-core = { workspace = true, default-features = false }
+asciidoc-parser.workspace = true
+asciimath-rs = { workspace = true, optional = true }
+math-core = { workspace = true, optional = true }
+tree-sitter = { workspace = true, optional = true }
+tree-sitter-bash = { workspace = true, optional = true }
+tree-sitter-c = { workspace = true, optional = true }
+tree-sitter-css = { workspace = true, optional = true }
+tree-sitter-go = { workspace = true, optional = true }
+tree-sitter-highlight = { workspace = true, optional = true }
+tree-sitter-html = { workspace = true, optional = true }
+tree-sitter-java = { workspace = true, optional = true }
+tree-sitter-javascript = { workspace = true, optional = true }
+tree-sitter-json = { workspace = true, optional = true }
+tree-sitter-python = { workspace = true, optional = true }
+tree-sitter-rust = { workspace = true, optional = true }
+tree-sitter-toml-ng = { workspace = true, optional = true }
+tree-sitter-typescript = { workspace = true, optional = true }
+tree-sitter-yaml = { workspace = true, optional = true }
+
+[lints]
+workspace = true

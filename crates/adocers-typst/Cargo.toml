@@ -1,0 +1,32 @@
+[package]
+name = "adocers-typst"
+description = "Typeset an AsciiDoc document as a PDF with Typst — no LaTeX, no headless browser, no fonts to install"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["math", "mermaid"]
+
+# `AsciiMath` equations, parsed by `asciimath-rs` and rewritten as Typst's own
+# mathematics. LaTeX needs no feature: `mitex` translates it and is always
+# here, because it is small and nothing else does what it does.
+math = ["dep:asciimath-rs"]
+
+# Place drawn mermaid diagrams. Without it a diagram is typeset as the listing
+# block it was written as.
+mermaid = ["adocers-render-core/mermaid"]
+
+[dependencies]
+adocers-render-core = { workspace = true, default-features = false }
+anyhow.workspace = true
+asciidoc-parser.workspace = true
+asciimath-rs = { workspace = true, optional = true }
+mitex.workspace = true
+typst.workspace = true
+typst-as-lib.workspace = true
+typst-pdf.workspace = true
+
+[lints]
+workspace = true

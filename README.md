@@ -9,6 +9,10 @@ Diagnostics are drawn against the source with
 [`axum`](https://github.com/tokio-rs/axum), and PDFs are typeset by
 [Typst](https://typst.app).
 
+The rendering is not in this crate. It is three libraries of its own, so
+anything else that needs an AsciiDoc document turned into something can use
+them without the command line coming too — see [Crates](#crates).
+
 ## Install
 
 With Cargo:
@@ -397,8 +401,8 @@ standalone page carries a small built-in stylesheet that honours the reader's
 light/dark preference.
 
 `asciidoc-parser` renders inline content only; block and document assembly is
-this tool's own back end (`src/render/`). `render` and `serve` go through the
-same pipeline, so a document looks the same either way.
+this tool's own back end (`crates/adocers-html/`). `render` and `serve` go
+through the same pipeline, so a document looks the same either way.
 
 ### Special sections
 
@@ -637,10 +641,11 @@ the same document gives the same PDF whatever is installed on the machine. The
 showcase — 16 pages, five diagrams, a figure and an outline — takes about
 290 ms, against 70 ms for the same document as a page.
 
-This is a second back end rather than a setting on the first (`src/render/typst/`).
-It walks the same block tree and covers the shape of an ordinary document:
-headings, paragraphs, lists, tables with spans and footers, listings, quotes and
-verses, admonitions with their icons, images, page breaks and cross references.
+This is a second back end rather than a setting on the first
+(`crates/adocers-typst/`). It walks the same block tree and covers the shape of
+an ordinary document: headings, paragraphs, lists, tables with spans and
+footers, listings, quotes and verses, admonitions with their icons, images, page
+breaks and cross references.
 A `:toc:` becomes a real outline, with page numbers and links to the sections it
 lists; `:sectnums:` numbers the headings from the same place the page's numbers
 come from; a listing is highlighted by the syntaxes Typst carries — the same
@@ -670,10 +675,11 @@ matrices, `cases`, `aligned`, arrays, accents, named operators and `\text` all
 come out typeset, inline as well as displayed.
 
 What `mitex` produces calls a few dozen handlers that its own Typst package
-supplies through a scope; `src/render/typst/math.typ` defines them, transcribed
-from that package. Typst has also renamed a good deal of its mathematics since
-`mitex`'s tables were written, and the names it moved are put back. Measured
-against every command `mitex` knows — 936 of them — 854 typeset and 82 do not.
+supplies through a scope; `crates/adocers-typst/src/math.typ` defines them,
+transcribed from that package. Typst has also renamed a good deal of its
+mathematics since `mitex`'s tables were written, and the names it moved are put
+back. Measured against every command `mitex` knows — 936 of them — 854 typeset
+and 82 do not.
 
 The 82 are not an error. A document whose equations will not lay out is
 rendered a second time with all of them shown as their source, and says so on
@@ -708,6 +714,40 @@ brackets `sqrt(4)` is written with — but the mis-readings are the parser's, an
 the PDF back end along with the `typst` crates, and asking such a build
 for a `.pdf` says so rather than writing something wrong.
 
+## Crates
+
+The command line is a thin shell. Everything that turns a parsed document into
+output is a library, published separately and usable on its own:
+
+| Crate | What it does |
+| --- | --- |
+| [`adocers-html`](crates/adocers-html) | The HTML5 back end: block tree in, a page or a fragment out. Follows Asciidoctor's converter — the same wrapper `div`s and class names — so a stylesheet written for Asciidoctor applies unchanged. Syntax highlighting, `MathML` and drawn mermaid diagrams are features of its own. |
+| [`adocers-typst`](crates/adocers-typst) | The PDF back end: block tree in, Typst markup and then a PDF out. No LaTeX, no headless browser, no fonts to install. |
+| [`adocers-render-core`](crates/adocers-render-core) | What the two agree on, so a page and a PDF of the same document cannot disagree about it: which sections are numbered and what each shows, which header attributes are facts about the document and how they read, the icon an admonition is marked with, and the SVG a mermaid block is drawn as. |
+
+Neither back end depends on the other, so a tool that only wants PDFs does not
+compile the HTML one. Both take a `Document` from
+[`asciidoc-parser`](https://github.com/asciidoc-rs/asciidoc-parser):
+
+```rust
+let mut parser = asciidoc_parser::Parser::default();
+let document = parser.parse("= Title\n\nSome prose.\n");
+
+let page = adocers_html::render(&document, &adocers_html::Options {
+    stylesheet: Some(adocers_html::default_stylesheet()),
+    ..adocers_html::Options::default()
+}).html;
+
+let pdf = adocers_typst::pdf(&document, std::path::Path::new("."), &adocers_typst::Options {
+    icons: true,
+    math: true,
+    ..adocers_typst::Options::default()
+})?;
+```
+
+`adocers-typst` needs a base directory because a document names its images
+relative to where it was read from.
+
 ## Benchmarks and profiling
 
 `benches/render.rs` times the pipeline in the pieces it is actually made of, so
@@ -724,7 +764,7 @@ cargo bench -- --baseline before   # after a change
 | Group | What it measures |
 | --- | --- |
 | `parse` | `asciidoc-parser` alone. The floor under every render, and not this crate's code — worth knowing so a slow document can be blamed correctly. |
-| `render` | The back end with highlighting off: block tree in, markup out. The number to watch when changing `src/render/`. |
+| `render` | The back end with highlighting off: block tree in, markup out. The number to watch when changing `crates/adocers-html/`. |
 | `render-highlighted` | The same documents with highlighting on, against warm grammars. The difference from `render` is what tree-sitter costs per byte. |
 | `cold-start` | A fresh process per iteration, which is the only way to see what a one-shot render pays. `one-block` against `one-block-no-highlight` is what compiling a grammar costs; `showcase-once` against `showcase-twice` differs by one whole document, so the gap is what a document costs and the rest is setup. |
 | `pipeline` | Parse and render together, with the stylesheet, as the command line does it. |
