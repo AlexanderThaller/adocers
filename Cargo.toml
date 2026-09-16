@@ -6,6 +6,8 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/AlexanderThaller/adocers"
+# `kstring` and `math-core` are what set this; nothing here asks for more.
+rust-version = "1.96"
 
 [workspace.dependencies]
 adocers-html = { version = "0.1", path = "crates/adocers-html" }
@@ -80,9 +82,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 description = "Render AsciiDoc documents to HTML, with source-anchored diagnostics and a watch mode"
 keywords = ["asciidoc", "html", "pdf", "asciidoctor", "cli"]
 categories = ["command-line-utilities", "text-processing"]
+
+# `resources/` carries two git submodules — Asciidoctor's own website and their
+# Ruby doctest project — which the benchmarks and the doctest suite read. They
+# are someone else's repositories and fifty times the size of this one, so a
+# published crate does not carry them: both suites already skip what they
+# cannot find. Excluding them takes the package from 7.1 MB to 136 KB.
+exclude = [
+  "resources/asciidoctor-doctest",
+  "resources/asciidoctor.org",
+  "CLAUDE.md",
+]
 
 [features]
 default = ["serve", "highlight", "math", "mermaid", "pdf"]
@@ -103,7 +117,6 @@ math = ["adocers-html/math", "adocers-typst?/math"]
 
 # Syntax highlighting, and the grammars it parses with.
 highlight = ["adocers-html/highlight"]
-tower-http = ["dep:tower-http"]
 
 [dependencies]
 adocers-html = { workspace = true, default-features = false }
