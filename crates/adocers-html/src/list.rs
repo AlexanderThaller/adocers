@@ -394,6 +394,10 @@ mod tests {
         render(&document, options).html
     }
 
+    /// A diagram counts as a picture only once it is drawn as one: without
+    /// the feature it stays the listing block it was written as, and a
+    /// listing is not what `Figure` numbers.
+    #[cfg(feature = "mermaid")]
     #[test]
     fn a_drawn_diagram_is_numbered_with_the_pictures() {
         let html = fragment(

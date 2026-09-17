@@ -6,6 +6,6 @@
 //! and every listing renders as plain escaped text.
 
 /// Never highlights: no grammar is compiled in.
-pub fn highlight(_language: &str, _source: &str) -> Option<String> {
+pub(crate) fn highlight(_language: &str, _source: &str) -> Option<String> {
     None
 }
