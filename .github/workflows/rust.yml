@@ -1,0 +1,135 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push supersedes the run in flight for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+# `.cargo/config.toml` asks for `-Ctarget-cpu=x86-64-v3`, and every job here
+# inherits it. That is fine on GitHub's x86 fleet, which is AVX2 throughout,
+# and it is why none of these jobs may move to an `-arm` runner: the flag is
+# not a valid target there and the build fails outright. Building for another
+# architecture is `nix build` in publish-image.yml, which leaves the file out.
+
+jobs:
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      # persist-credentials: false throughout, as in publish-image.yml: nothing
+      # in this workflow authenticates to git, and the default would leave
+      # GITHUB_TOKEN in .git/config as an http.extraheader for the rest of the
+      # job — readable by every build script cargo goes on to run, and by the
+      # nextest binary the test job downloads.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `.rustfmt.toml` uses options that only exist on nightly —
+      # format_strings, imports_granularity, imports_layout, wrap_comments.
+      # Stable rustfmt ignores them silently and would pass on a tree the repo
+      # considers unformatted, so this job is the one that must not use stable.
+      - name: Install nightly rustfmt
+        run: rustup toolchain install nightly --profile minimal --component rustfmt
+
+      - name: Check formatting
+        run: cargo +nightly fmt --all --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Stable, not nightly: the lint set lives in Cargo.toml and applies on
+      # either, and building here is what catches code that only compiles on
+      # nightly.
+      - name: Install stable clippy
+        run: rustup toolchain install stable --profile minimal --component clippy
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # `--all-targets` reaches the benchmarks and the test suites as well as
+      # the crates, which is where `unwrap_used` and `todo` are allowed and the
+      # rest of the pedantic set still is not.
+      - name: Lint
+        run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
+
+      # Again with every optional feature off, which is a different program:
+      # each of them puts `#[cfg]` on both sides of itself, and a `pub` item
+      # left reachable only through the half that is compiled out is exactly
+      # what the full build cannot see.
+      - name: Lint without the optional features
+        run: cargo +stable clippy --workspace --all-targets --locked --no-default-features -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      # With submodules: `tests/doctest.rs` renders Asciidoctor's own corpus,
+      # which lives in `resources/asciidoctor-doctest`, and **passes silently
+      # when it is not there**. A checkout without them would leave the suite
+      # green while testing none of it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+
+      # So the silent skip is turned into a failure here rather than trusted:
+      # if this file ever stops arriving, the run says so instead of passing
+      # with nothing rendered.
+      - name: Check the doctest corpus is there
+        run: test -d resources/asciidoctor-doctest/data/examples/asciidoc
+
+      - name: Install stable toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # A pinned release rather than get.nexte.st/latest, which is mutable and
+      # would run whatever binary it serves on the day. The checksum is
+      # committed here and checked before the archive is unpacked, so a
+      # substituted download fails the job instead of executing.
+      - name: Install nextest
+        env:
+          NEXTEST_VERSION: 0.9.144
+          NEXTEST_SHA256: 8a4f726272b0a1c499bd87ca3978bfbb1a8c20bb08ccf075b9996e2081bd1e1e
+        run: |
+          set -euo pipefail
+          archive="cargo-nextest-${NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/${archive}" \
+            -o nextest.tar.gz
+          echo "${NEXTEST_SHA256}  nextest.tar.gz" | sha256sum --check --strict -
+          tar zxf nextest.tar.gz -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          rm nextest.tar.gz
+
+      - name: Test
+        run: cargo +stable nextest run --workspace --locked
+
+      # nextest does not run doctests, so they get their own step. The three
+      # libraries are published, and an example in their documentation is read
+      # as an example whether or not it compiles.
+      - name: Doctests
+        run: cargo +stable test --doc --workspace --locked
+
+      # Every feature is optional and the back ends carry `#[cfg]` on both
+      # sides of each one, so a build with none of them is a different program
+      # — one the doctest suite already expects, since `FEATURE_FAILURES` is
+      # gated on `math` and says a build that converts no equations agrees
+      # with Asciidoctor again. This is what holds that claim to its word.
+      - name: Test without the optional features
+        run: cargo +stable nextest run --workspace --locked --no-default-features
