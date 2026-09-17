@@ -46,6 +46,15 @@
           rustc = toolchain;
         };
 
+      # What a dynamically linked build should look for at run time, or `[]`
+      # where the question does not arise. See `postFixup` in `adocersPackage`.
+      runpathFor =
+        pkgs:
+        lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+          pkgs.stdenv.cc.libc
+          pkgs.stdenv.cc.cc.libgcc
+        ];
+
       # The build reads the version from the manifest, so a release only has to
       # be cut in one place — `[workspace.package]`, which every crate in the
       # workspace inherits.
@@ -78,6 +87,7 @@
         {
           lib,
           rustPlatform,
+          runpath ? null,
         }:
         rustPlatform.buildRustPackage {
           pname = cargoToml.package.name;
@@ -100,6 +110,24 @@
           # flake as `github:AlexanderThaller/adocers?submodules=1`.
           doCheck = true;
 
+          # A full strip rather than the default `-S -p`. What is being removed
+          # is not only size: the debug information names the store paths the
+          # binary was linked against, and nix reads those as references — so
+          # an unstripped binary drags a compiler's worth of shared objects it
+          # never opens into the image behind it.
+          stripAllList = [ "bin" ];
+
+          # `libgcc_s.so.1` is the only file this binary ever opens out of
+          # gcc's `lib` output, and that output is ten megabytes of libstdc++
+          # and sanitizer runtimes it never touches — all of which the linker's
+          # runpath drags into the image behind that one shared object. nixpkgs
+          # also ships `libgcc_s.so.1` on its own, at 200 kB, and glibc already
+          # puts that in the closure, so narrowing the runpath to what is
+          # actually opened costs nothing and sheds the fat output.
+          postFixup = lib.optionalString (runpath != null && runpath != [ ]) ''
+            patchelf --set-rpath ${lib.makeLibraryPath runpath} $out/bin/adocers
+          '';
+
           meta = {
             inherit (cargoToml.package) description;
             homepage = "https://github.com/AlexanderThaller/adocers";
@@ -111,16 +139,91 @@
             platforms = lib.platforms.unix;
           };
         };
+
+      # The container: the binary, the shared objects it opens and the libc
+      # closure behind them, and nothing else. No shell, no `coreutils`, no
+      # package manager — an image with a shell in it is an image someone will
+      # debug in, and there is nothing in this one to debug.
+      #
+      # It is the ordinary glibc build and not a static musl one, which would
+      # make the image a single file with no loader in it. A render is almost
+      # entirely allocation — a document is parsed into a tree of owned strings
+      # and rendered into another, and the tree-sitter grammars are C and call
+      # `malloc` themselves — and musl's allocator is slow enough at that to
+      # dominate the run. antors, which renders whole sites through these very
+      # crates, measured 1697 ms against glibc's 821 ms on a 232-page site
+      # until it brought an allocator of its own along. Nothing here brings
+      # one, so the image keeps the libc that is fast without it, and pays for
+      # it in the shared objects it has to carry.
+      containerFor =
+        pkgs:
+        let
+          adocers = self.packages.${pkgs.stdenv.hostPlatform.system}.adocers;
+        in
+        pkgs.dockerTools.buildLayeredImage {
+          name = "adocers";
+          tag = cargoToml.workspace.package.version;
+
+          # `WorkingDir` has to exist for a run that does *not* mount over it —
+          # `adocers --help`, or a document given by absolute path. `/tmp` is
+          # there because `-o /tmp/...` is the obvious way to render a document
+          # whose output you do not want to keep, and an image with no writable
+          # directory at all fails that with `Permission denied`.
+          extraCommands = ''
+            mkdir -p docs tmp
+            chmod 1777 tmp
+          '';
+
+          config = {
+            # The store path itself rather than a symlink at the root, which is
+            # what keeps even `/bin` out of the image.
+            Entrypoint = [ (lib.getExe adocers) ];
+
+            # Documents are mounted here and named relative to it, so the
+            # common case is `docker run -v "$PWD:/docs" adocers doc.adoc`. Add
+            # `--user "$(id -u):$(id -g)"` and the pages it writes belong to
+            # you rather than to root.
+            WorkingDir = "/docs";
+
+            # `adocers serve` defaults to loopback, which reaches nothing from
+            # outside the container; `--bind 0.0.0.0:8080` is what makes this
+            # port worth exposing.
+            ExposedPorts = {
+              "8080/tcp" = { };
+            };
+
+            Labels = {
+              "org.opencontainers.image.title" = "adocers";
+              "org.opencontainers.image.description" = cargoToml.package.description;
+              "org.opencontainers.image.source" = "https://github.com/AlexanderThaller/adocers";
+              "org.opencontainers.image.version" = cargoToml.workspace.package.version;
+              "org.opencontainers.image.licenses" = "MIT OR Apache-2.0";
+            };
+          };
+        };
     in
     {
       overlays.default = final: _prev: {
-        adocers = final.callPackage adocersPackage { rustPlatform = rustPlatformFor final; };
+        adocers = final.callPackage adocersPackage {
+          rustPlatform = rustPlatformFor final;
+          runpath = runpathFor final;
+        };
       };
 
-      packages = forAllSystems (pkgs: rec {
-        adocers = pkgs.callPackage adocersPackage { rustPlatform = rustPlatformFor pkgs; };
-        default = adocers;
-      });
+      packages = forAllSystems (
+        pkgs:
+        rec {
+          adocers = pkgs.callPackage adocersPackage {
+            rustPlatform = rustPlatformFor pkgs;
+            runpath = runpathFor pkgs;
+          };
+
+          default = adocers;
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          container = containerFor pkgs;
+        }
+      );
 
       apps = forAllSystems (pkgs: rec {
         adocers = {
