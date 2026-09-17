@@ -176,6 +176,7 @@ pub fn markup(
     let mut emitter = Emitter {
         out: String::new(),
         base: base.to_path_buf(),
+        images_dir: attribute(document, "imagesdir"),
         images: Vec::new(),
         toc: Toc::of(document),
         options: *options,
@@ -658,6 +659,10 @@ struct Emitter {
 
     /// The directory the document came from, which images are relative to.
     base: PathBuf,
+
+    /// What `:imagesdir:` was set to, which a block's picture is named
+    /// relative to.
+    images_dir: Option<String>,
 
     /// The images referred to, with their contents, for the compiler.
     images: Vec<(String, Vec<u8>)>,
@@ -1274,18 +1279,38 @@ impl Emitter {
         self.out.push_str("]\n\n");
     }
 
+    /// Place a media target inside `:imagesdir:`, the way the page does.
+    ///
+    /// A document keeps its pictures in one directory and names the rest
+    /// relative to it. The parser has already done this to a picture in a line
+    /// of text, which reaches here as the `src` of an `<img>`, but it leaves a
+    /// block's target as the author wrote it — so a block's is resolved here.
+    /// A target that says where it lives already, a URL or a `data:` URI or an
+    /// absolute path, is left alone.
+    fn in_images_dir(&self, target: &str) -> String {
+        let Some(dir) = self.images_dir.as_deref() else {
+            return target.to_string();
+        };
+
+        if target.starts_with('/') || target.starts_with("data:") || target.contains("://") {
+            return target.to_string();
+        }
+
+        format!("{}/{target}", dir.trim_end_matches('/'))
+    }
+
     /// An image, or a video and audio reference that a page cannot play.
     fn media(&mut self, media: &asciidoc_parser::blocks::MediaBlock<'_>) {
-        let target = media.resolved_target();
+        let target = self.in_images_dir(media.resolved_target());
 
         // A picture has to be readable from disk to be placed. One that is not
         // — a URL, or a video, or a path that does not resolve — is named
         // instead, so the reader knows what was meant.
-        let Ok(bytes) = std::fs::read(self.base.join(target)) else {
+        let Ok(bytes) = std::fs::read(self.base.join(&target)) else {
             let _ = writeln!(
                 self.out,
                 "#text(style: \"italic\", fill: rgb(\"#656d77\"))[[{}]]\n",
-                inline_markup(target)
+                inline_markup(&target)
             );
 
             return;
@@ -2019,6 +2044,22 @@ mod tests {
             "the listing keeps its mark: {out}"
         );
         assert!(out.contains("adoccallout"), "and so does its list: {out}");
+    }
+
+    #[test]
+    fn a_block_picture_is_looked_for_inside_imagesdir() {
+        // A picture that was not found is named as it was looked for, which is
+        // the directory `:imagesdir:` names rather than the document's own.
+        let out = render("= T\n:imagesdir: pics\n\nimage::figure.png[]\n");
+
+        assert!(out.contains("[pics\\/figure.png]"), "{out}");
+    }
+
+    #[test]
+    fn a_picture_that_says_where_it_lives_keeps_it() {
+        let out = render("= T\n:imagesdir: pics\n\nimage::https://example.com/f.png[]\n");
+
+        assert!(out.contains("[https:\\/\\/example.com\\/f.png]"), "{out}");
     }
 
     #[test]
