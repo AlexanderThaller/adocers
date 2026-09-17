@@ -2,7 +2,7 @@
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/AlexanderThaller/adocers"
@@ -13,9 +13,9 @@ rust-version = "1.96"
 # Every crate here takes these with their defaults off and re-enables what it
 # wants through features of its own, so the workspace entry says so. A member
 # that tried to override it instead is what newer cargo refuses.
-adocers-html = { version = "0.2", path = "crates/adocers-html", default-features = false }
-adocers-render-core = { version = "0.2", path = "crates/adocers-render-core", default-features = false }
-adocers-typst = { version = "0.2", path = "crates/adocers-typst", default-features = false }
+adocers-html = { version = "0.3", path = "crates/adocers-html", default-features = false }
+adocers-render-core = { version = "0.3", path = "crates/adocers-render-core", default-features = false }
+adocers-typst = { version = "0.3", path = "crates/adocers-typst", default-features = false }
 anyhow = "1"
 asciidoc-parser = "0.31"
 asciimath-rs = "0.6.2"
