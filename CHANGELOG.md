@@ -5,6 +5,18 @@ versions are kept in step: all four are released together from one workspace.
 
 ## Unreleased
 
+### Added
+
+**A container image, and a workflow that publishes it.** `nix build .#container`
+builds an image holding the binary and the libc closure behind it and nothing
+else — no shell, no `coreutils`, no package manager. Every push to `main` builds
+it, pushes it to `ghcr.io/alexanderthaller/adocers` as `latest` and
+`sha-<short-sha>`, signs it keylessly with `cosign` and attaches an SPDX SBOM.
+It is the ordinary glibc build rather than a static musl one, which would have
+made the image a single file: a render is almost entirely allocation, and musl's
+allocator is slow enough at that to dominate the run unless the binary brings
+one of its own, which this one does not.
+
 ### Fixed
 
 **A mark against a word character stopped a PDF being written at all.**

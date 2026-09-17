@@ -53,6 +53,35 @@ On NixOS, take the flake as an input and let the overlay put `adocers` in
 linted with — including a `rustfmt` that accepts the nightly options
 `.rustfmt.toml` asks for.
 
+With Docker — the same binary again, in an image the flake builds and every
+push to `main` publishes:
+
+```
+docker run --rm -v "$PWD:/docs" ghcr.io/alexanderthaller/adocers doc.adoc
+docker run --rm -p 8080:8080 -v "$PWD:/docs" \
+  ghcr.io/alexanderthaller/adocers serve --bind 0.0.0.0:8080
+```
+
+`/docs` is the working directory, so a document is named relative to where the
+tree is mounted; `serve` has to be told to bind something other than its
+loopback default or the published port reaches nothing. Add
+`--user "$(id -u):$(id -g)"` and the files it writes belong to you rather than
+to root.
+
+The image holds the binary and the libc closure behind it and nothing else — no
+shell, no `coreutils`, nothing to debug in. It is tagged `latest` and
+`sha-<short-sha>`, and each push is signed keylessly with `cosign` and carries
+an SPDX SBOM:
+
+```
+cosign verify ghcr.io/alexanderthaller/adocers:latest \
+  --certificate-identity-regexp '^https://github.com/AlexanderThaller/adocers/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+`nix build .#container` builds the same image locally, as a tarball `docker
+load` reads.
+
 ## Usage
 
 ```
