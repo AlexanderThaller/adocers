@@ -3,6 +3,61 @@
 Notable changes to `adocers` and the three crates it is built from. The
 versions are kept in step: all four are released together from one workspace.
 
+## 0.3.0
+
+The outline stops being something only the document can place. A host with a
+page of its own is handed the markup, the depth and the rules for it, and puts
+it where its own layout has room.
+
+### The outline, for a host that places it itself
+
+`Rendered` now carries `toc` beside `html`: the outline as markup, or `None`
+when the document has no sections. It is built whether or not the document
+asked for one, because where an outline goes is not always the document's
+decision — a site generator wants it *beside* the article, in a column its
+layout holds open, and no `toc` attribute describes that placement.
+`toc: right` docks against the frame of a standalone page, and a `--fragment`
+has no `<body>` to carry the class at all.
+
+It is the *same* markup the body carries when the document does place one, so
+a host that places it itself should unset `toc` or the reader gets two.
+Unsetting it is the whole of what such a host has to do: the outline is still
+built, and `toclevels` and `toc-title` are still honoured. The renderer builds
+it once into a buffer of its own and copies it in where the document places
+it, so the placed outline and the handed-over one cannot drift into being two
+renderers.
+
+- **`Options::toc_levels`** overrides the document's `toclevels`. A host
+  building a site has a site-wide default and its own name for the per-page
+  override — Antora spells it `page-toclevels`, which this crate has no reason
+  to know — and has already resolved the two by the time it renders, so it
+  says the answer rather than writing it back into the document. `None` leaves
+  the depth to the document, which is what a standalone render wants.
+- **`toc_stylesheet()`** is the entries' own look and nothing about where they
+  sit: no width, no docking, no column. Those rules used to live next to the
+  ones that dock the outline against a standalone page, so a host taking them
+  took that frame along with it. Unlike `document_stylesheet()`, these must
+  *not* be nested under wherever the document goes — an outline placed beside
+  the document is not inside it.
+
+`default_stylesheet()` still composes every part, and a standalone page is
+unchanged but for the fix below.
+
+### Fixed
+
+**A reading mark spanning a section and its subsections came out as a flight
+of steps.** The mark is a border down the side of an entry, and a subsection
+was indented by indenting the list it sits in, which carried that border along
+with it. The entry's own text is indented instead, so the gutter stays one
+column and the mark is a line however many levels it crosses.
+
+### Compatibility
+
+`Rendered` and `Options` each gained a field, so a caller that builds either
+with a struct literal will not compile against this. Minor rather than patch.
+
+Minimum supported Rust version is still **1.96**.
+
 ## 0.2.0
 
 A page can now be read as well as rendered: a listing offers to copy itself, a
