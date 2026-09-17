@@ -3,6 +3,28 @@
 Notable changes to `adocers` and the three crates it is built from. The
 versions are kept in step: all four are released together from one workspace.
 
+## Unreleased
+
+### Fixed
+
+**A mark against a word character stopped a PDF being written at all.**
+AsciiDoc's unconstrained forms put one there — `**b**old` marks a word and goes
+on — and the marks were written as Typst's own `*…*` and `_…_`, which are
+delimiters only at a word boundary. Typst read the closing one as an opening
+one, found nothing to close it, and refused the document: a page of prose lost
+to one emphasised syllable. They are written as `#strong[…]` and `#emph[…]`
+now, which have no such rule, and a mark that used to come out as a pair of
+asterisks around the word comes out as the emphasis it was.
+
+**`:imagesdir:` was ignored for a block image.** A picture in a line of text
+reaches the PDF back end as the `src` of an `<img>` the parser has already
+placed inside the directory; a block's target arrives as the author wrote it,
+and was looked for under the document's own directory instead. The two are
+resolved the same way now, by the rule the page uses — a URL, a `data:` URI and
+an absolute path say where they live already, and everything else is relative
+to `:imagesdir:` — so a document can keep its pictures in one directory and a
+block image can name one outside its own module.
+
 ## 0.3.0
 
 The outline stops being something only the document can place. A host with a
