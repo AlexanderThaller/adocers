@@ -162,6 +162,7 @@ pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
             highlight: !common.no_highlight,
             mermaid: mermaid(common),
             math: math(common),
+            toc_levels: None,
             copy: false,
             mark_reading: false,
         });
@@ -185,6 +186,7 @@ pub fn options(common: &CommonArgs, fragment: bool) -> Result<Options> {
         highlight: !common.no_highlight,
         mermaid: mermaid(common),
         math: math(common),
+        toc_levels: None,
         copy: !common.no_copy,
         mark_reading: !common.no_reading_mark,
     })

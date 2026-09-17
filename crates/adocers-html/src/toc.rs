@@ -23,7 +23,10 @@ use adocers_render_core::numbering::Numbering;
 
 use crate::{
     Renderer,
-    html::escape_attr,
+    html::{
+        Buffer,
+        escape_attr,
+    },
 };
 
 /// One line of the outline, plus the lines nested beneath it.
@@ -85,13 +88,38 @@ impl<'src> Overrides<'src> {
 impl Renderer<'_> {
     /// Render the `#toc` container, if the document has any sections to list.
     pub(super) fn toc(&mut self) {
-        self.toc_with(&Overrides::default());
+        if let Some(markup) = self.toc_markup(&Overrides::default()) {
+            self.out.raw(&markup);
+        }
+    }
+
+    /// The outline as markup of its own, for a host that places it itself.
+    ///
+    /// `None` when the document has no sections to list, which is the same
+    /// question [`toc`](Self::toc) answers by writing nothing.
+    pub(super) fn outline(&mut self) -> Option<String> {
+        self.toc_markup(&Overrides::default())
+    }
+
+    /// Render the outline into a buffer of its own, leaving `out` as it was.
+    ///
+    /// The outline is wanted in two places that cannot share one pass: inside
+    /// the body where the document asks for it, and on its own for a host that
+    /// lays out its own page. Rendering it aside and copying it in is what
+    /// keeps those the same markup rather than two renderers to keep in step.
+    fn toc_markup(&mut self, overrides: &Overrides<'_>) -> Option<String> {
+        let held = std::mem::replace(&mut self.out, Buffer::new());
+        let placed = self.toc_with(overrides);
+        let markup = std::mem::replace(&mut self.out, held).finish();
+
+        placed.then_some(markup)
     }
 
     /// Render the outline, and say whether there turned out to be one.
     fn toc_with(&mut self, overrides: &Overrides<'_>) -> bool {
         let depth = overrides
             .levels
+            .or(self.options.toc_levels)
             .unwrap_or_else(|| self.document.toc_levels());
         let entries = entries(self.document.child_blocks(), 1, depth, &self.numbering);
 
@@ -142,11 +170,13 @@ impl Renderer<'_> {
     /// leaves a note saying so, which is what Asciidoctor does and is a good
     /// deal easier to debug than an empty space.
     pub(super) fn toc_macro(&mut self, toc: &TocBlock<'_>) {
-        let placed = !self.toc_rendered
-            && self.document.toc_mode() == asciidoc_parser::document::TocMode::Macro
-            && self.toc_with(&Overrides::from_macro(toc.macro_attrlist()));
+        let markup = (!self.toc_rendered
+            && self.document.toc_mode() == asciidoc_parser::document::TocMode::Macro)
+            .then(|| self.toc_markup(&Overrides::from_macro(toc.macro_attrlist())))
+            .flatten();
 
-        if placed {
+        if let Some(markup) = markup {
+            self.out.raw(&markup);
             self.toc_rendered = true;
         } else {
             self.out.line("<!-- toc disabled -->");

@@ -320,10 +320,55 @@ table.tableblock .literal pre { background: none; padding: 0; border-radius: 0; 
 
 "#;
 
-/// The rules for the page a standalone document is put in: the reset, the body,
-/// the three landmarks, and the outline.
+/// The outline's own look, separately from where a page docks it.
 ///
-/// A host with a page of its own replaces this and keeps the other two.
+/// A host that lays out its own page still wants the entries to look like
+/// entries; what it does not want is the frame around them. Keeping the two
+/// apart is what lets it take one without the other.
+pub(crate) const TOC: &str = r"/* The outline, as a column of entries with a mark against the one being read,
+   rather than a boxed list. There is no box and no rail: a gutter is held open
+   down the side of every entry with a border that is not painted, and only the
+   section being read draws in it, so the mark has somewhere to go and nothing
+   moves when it arrives. The title is set small and lettered, because at the
+   head of a list of headings it is a label rather than another heading. */
+#toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
+#toctitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#toc ul { list-style: none; margin: 0; padding: 0; }
+#toc a {
+  display: block;
+  padding: 0.15rem 0 0.15rem 0.6rem;
+  border-left: 2px solid transparent;
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 0.875rem;
+}
+/* A subsection is indented by its own text, not by the list it sits in, so the
+   gutter stays one column all the way down. Indenting the list would carry the
+   border along with it, and then a mark spanning a section and its subsections
+   comes out as a flight of steps instead of a line. */
+#toc .sectlevel2 > li > a { padding-left: 1.35rem; }
+#toc .sectlevel3 > li > a { padding-left: 2.1rem; }
+#toc .sectlevel4 > li > a { padding-left: 2.85rem; }
+#toc .sectlevel5 > li > a { padding-left: 3.6rem; }
+#toc a:hover { color: var(--fg); }
+/* `is-active` is put on by the outline's own script; see `reading`. */
+#toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
+
+#toc a { text-decoration: none; }
+";
+
+/// The rules for the page a standalone document is put in: the reset, the body,
+/// the three landmarks, and where the outline docks.
+///
+/// A host with a page of its own replaces this and keeps the others — the
+/// outline's own look is in [`TOC`], which such a host does still want.
 pub(crate) const PAGE: &str = r#"* { box-sizing: border-box; }
 
 body {
@@ -341,37 +386,6 @@ body {
 #header, #content, #footer { max-width: 50rem; margin: 0 auto; padding: 0 1.25rem; }
 #header { padding-top: 2.5rem; }
 #footer { padding-bottom: 3rem; color: var(--muted); font-size: 0.85rem; }
-
-/* The outline, as a column of entries with a mark against the one being read,
-   rather than a boxed list. There is no box and no rail: a gutter is held open
-   down the side of every entry with a border that is not painted, and only the
-   section being read draws in it, so the mark has somewhere to go and nothing
-   moves when it arrives. The title is set small and lettered, because at the
-   head of a list of headings it is a label rather than another heading. */
-#toc { border: 0; padding: 0; margin: 1.5rem 0 2rem; }
-#toctitle {
-  margin: 0 0 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-#toc ul { list-style: none; margin: 0; padding: 0; }
-#toc ul ul { padding-left: 0.75rem; }
-#toc a {
-  display: block;
-  padding: 0.15rem 0 0.15rem 0.6rem;
-  border-left: 2px solid transparent;
-  color: var(--muted);
-  line-height: 1.4;
-  font-size: 0.875rem;
-}
-#toc a:hover { color: var(--fg); }
-/* `is-active` is put on by the outline's own script; see `reading`. */
-#toc a.is-active { border-left-color: var(--accent); color: var(--accent); }
-
-#toc a { text-decoration: none; }
 /* Side-docked table of contents on wide screens */
 @media (min-width: 62rem) {
   body.toc2 #toc {

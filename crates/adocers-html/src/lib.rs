@@ -122,6 +122,15 @@ pub struct Options {
     /// owns what it loads.
     pub copy: bool,
 
+    /// How deep the outline goes, overriding the document's `toclevels`.
+    ///
+    /// `None` leaves the depth to the document, which is what a standalone
+    /// render wants. A host building a site has a site-wide default and its own
+    /// name for the per-page override — Antora spells it `page-toclevels` —
+    /// and has already resolved the two by the time it renders, so it says the
+    /// answer rather than trying to write it back into the document.
+    pub toc_levels: Option<usize>,
+
     /// Whether the outline marks the entry for the section being read.
     ///
     /// Beside a long document a docked outline can say where the reader is as
@@ -137,11 +146,31 @@ pub struct Options {
 pub struct Rendered {
     /// The markup.
     pub html: String,
+
+    /// The outline, as markup, or `None` when the document has no sections.
+    ///
+    /// This is handed over whether or not the document asked for an outline,
+    /// because where one goes is not always the document's decision: a host
+    /// laying out its own page may want the outline beside the article rather
+    /// than in it, which is a placement no attribute can describe.
+    ///
+    /// It is the *same* markup [`html`](Self::html) carries when the document
+    /// does ask for one — so a host that places this itself should unset `toc`,
+    /// or the reader gets two. Unsetting it is the whole of what such a host
+    /// has to do: the outline is still built, and still honours `toclevels` and
+    /// `toc-title`.
+    pub toc: Option<String>,
 }
 
 /// The stylesheet embedded in a standalone page when the caller names no other.
 pub fn default_stylesheet() -> String {
-    format!("{}{}{}", css::VARIABLES, css::PAGE, css::DOCUMENT)
+    format!(
+        "{}{}{}{}",
+        css::VARIABLES,
+        css::PAGE,
+        css::TOC,
+        css::DOCUMENT
+    )
 }
 
 /// The custom properties the document rules — and every drawn diagram — read.
@@ -175,6 +204,19 @@ pub fn document_stylesheet() -> &'static str {
     css::DOCUMENT
 }
 
+/// The rules for the outline, for a host that places one itself.
+///
+/// These are the entries' own look and nothing about where they sit: no
+/// width, no docking, no column. A host that takes [`Rendered::toc`] and puts
+/// it in a layout of its own wants exactly this much — the rest is the page's
+/// business, and a host that has its own page has its own answer for it.
+///
+/// Unlike [`document_stylesheet`] these are *not* nested under wherever the
+/// document goes: an outline placed beside the document is not inside it.
+pub fn toc_stylesheet() -> &'static str {
+    css::TOC
+}
+
 /// Render `document` to HTML.
 pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> Rendered {
     let mut renderer = Renderer {
@@ -202,7 +244,10 @@ pub fn render<'src>(document: &'src Document<'src>, options: &'src Options) -> R
         document_page(document, options, &body)
     };
 
-    Rendered { html }
+    Rendered {
+        html,
+        toc: renderer.outline(),
+    }
 }
 
 /// Convert the inline equations in a rendered body.
