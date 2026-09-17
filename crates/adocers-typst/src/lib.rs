@@ -1863,7 +1863,7 @@ mod tests {
         let out = render("= Title\n\n== A section\n\nSome *bold* prose.\n");
 
         assert!(out.contains("= A section"), "{out}");
-        assert!(out.contains("*bold*"), "{out}");
+        assert!(out.contains("#strong[bold]"), "{out}");
     }
 
     #[test]

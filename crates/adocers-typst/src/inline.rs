@@ -60,8 +60,12 @@ fn element(tag: &str, rest: &mut &str) -> String {
     let inner = typst(&content);
 
     match name.as_str() {
-        "strong" | "b" => format!("*{inner}*"),
-        "em" | "i" => format!("_{inner}_"),
+        // Written as calls rather than as `*…*` and `_…_`: AsciiDoc's
+        // unconstrained forms put a mark against a word character, which is
+        // where Typst's own delimiters stop being delimiters — `**b**old`
+        // would reach it as `*b*old` and be refused as unclosed.
+        "strong" | "b" => format!("#strong[{inner}]"),
+        "em" | "i" => format!("#emph[{inner}]"),
         "code" => format!("#raw({})", string(&text(&content))),
         "mark" => format!("#highlight[{inner}]"),
 
@@ -340,14 +344,25 @@ mod tests {
 
     #[test]
     fn translates_the_marks_asciidoc_emits() {
-        assert_eq!(typst("<strong>a</strong>"), "*a*");
-        assert_eq!(typst("<em>a</em>"), "_a_");
+        assert_eq!(typst("<strong>a</strong>"), "#strong[a]");
+        assert_eq!(typst("<em>a</em>"), "#emph[a]");
         assert_eq!(typst("plain"), "plain");
     }
 
     #[test]
+    fn marks_a_word_that_goes_on() {
+        // AsciiDoc's unconstrained `**b**old` puts a mark against a word
+        // character, where Typst's own delimiters stop being delimiters.
+        assert_eq!(typst("<strong>b</strong>old"), "#strong[b]old");
+        assert_eq!(typst("<em>i</em>talic"), "#emph[i]talic");
+    }
+
+    #[test]
     fn keeps_nesting() {
-        assert_eq!(typst("<strong>a <em>b</em></strong>"), "*a _b_*");
+        assert_eq!(
+            typst("<strong>a <em>b</em></strong>"),
+            "#strong[a #emph[b]]"
+        );
     }
 
     #[test]
@@ -380,7 +395,7 @@ mod tests {
         assert_eq!(typst("a-b"), "a-b");
         assert_eq!(typst("a~b"), "a\\~b");
         assert_eq!(typst("a // b"), "a \\/\\/ b");
-        assert_eq!(typst("g/<strong>h</strong>/i"), "g\\/*h*\\/i");
+        assert_eq!(typst("g/<strong>h</strong>/i"), "g\\/#strong[h]\\/i");
         assert_eq!(typst("The end."), "The end.");
     }
 
