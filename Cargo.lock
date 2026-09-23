@@ -26,7 +26,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "adocers"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "adocers-html",
  "adocers-typst",
@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "adocers-html"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "adocers-render-core",
  "asciidoc-parser",
@@ -71,7 +71,7 @@ dependencies = [
 
 [[package]]
 name = "adocers-render-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "asciidoc-parser",
  "merman",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "adocers-typst"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "adocers-render-core",
  "anyhow",
