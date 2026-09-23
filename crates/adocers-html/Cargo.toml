@@ -32,6 +32,7 @@ highlight = [
   "dep:tree-sitter-html",
   "dep:tree-sitter-css",
   "dep:tree-sitter-java",
+  "dep:tree-sitter-sequel",
 ]
 
 # Equations, converted to MathML for the browser to draw. Without it an
@@ -67,6 +68,7 @@ tree-sitter-javascript = { workspace = true, optional = true }
 tree-sitter-json = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
+tree-sitter-sequel = { workspace = true, optional = true }
 tree-sitter-toml-ng = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }

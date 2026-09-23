@@ -29,11 +29,15 @@ use tree_sitter_highlight::{
 /// function to a reader — so that the stylesheet stays small enough to read.
 const CAPTURES: &[(&str, &str)] = &[
     ("attribute", "hl-attr"),
+    ("boolean", "hl-constant"),
     ("comment", "hl-comment"),
+    ("conditional", "hl-keyword"),
     ("constant", "hl-constant"),
     ("constant.builtin", "hl-constant"),
     ("constructor", "hl-type"),
     ("escape", "hl-escape"),
+    ("field", "hl-property"),
+    ("float", "hl-number"),
     ("function", "hl-function"),
     ("function.builtin", "hl-function"),
     ("function.method", "hl-function"),
@@ -42,10 +46,12 @@ const CAPTURES: &[(&str, &str)] = &[
     ("module", "hl-type"),
     ("number", "hl-number"),
     ("operator", "hl-operator"),
+    ("parameter", "hl-parameter"),
     ("property", "hl-property"),
     ("punctuation", "hl-punctuation"),
     ("punctuation.bracket", "hl-punctuation"),
     ("punctuation.delimiter", "hl-punctuation"),
+    ("storageclass", "hl-keyword"),
     ("string", "hl-string"),
     ("string.special", "hl-string"),
     ("tag", "hl-tag"),
@@ -137,7 +143,11 @@ type Grammar = (
 );
 
 /// Every grammar compiled into this binary.
-fn table() -> [Grammar; 14] {
+#[expect(
+    clippy::too_many_lines,
+    reason = "A flat table of grammars reads best as one list, however long it grows."
+)]
+fn table() -> [Grammar; 15] {
     // Queries a grammar does not ship are empty, which the highlighter reads as
     // "nothing to do" rather than as an error.
     [
@@ -239,7 +249,36 @@ fn table() -> [Grammar; 14] {
             "",
             "",
         ),
+        (
+            "sql",
+            || tree_sitter_sequel::LANGUAGE.into(),
+            sql_highlights(),
+            "",
+            "",
+        ),
     ]
+}
+
+/// Patterns that repair the SQL grammar's highlight query, which is written for
+/// Neovim rather than for tree-sitter's own highlighter.
+///
+/// When several patterns capture one node, the highlighter keeps the last, so
+/// these are appended rather than prepended. A comment is captured as
+/// `@comment @spell`, and `@spell` has no class, so it would lose its colour. A
+/// number is told apart from a string with a Lua pattern, `%d`, which as a
+/// regex matches nothing, so every number would read as a string.
+const SQL_REPAIRS: &str = r#"
+(comment) @comment
+((literal) @number (#match? @number "^[-+]?\\d+$"))
+((literal) @float (#match? @float "^[-+]?\\d*\\.\\d*$"))
+"#;
+
+/// The SQL grammar's highlight query with [`SQL_REPAIRS`] after it, joined
+/// once.
+fn sql_highlights() -> &'static str {
+    static QUERY: OnceLock<String> = OnceLock::new();
+
+    QUERY.get_or_init(|| format!("{}{SQL_REPAIRS}", tree_sitter_sequel::HIGHLIGHTS_QUERY))
 }
 
 /// The compiled-in grammars, prepared once.
@@ -285,7 +324,7 @@ impl Lazy {
 ///
 /// Building this map costs nothing: it holds function pointers and query text,
 /// not compiled queries. Compiling one grammar's queries costs several
-/// milliseconds and there are fourteen of them, so they are compiled one at a
+/// milliseconds and there are fifteen of them, so they are compiled one at a
 /// time, when a document turns out to be written in that language. A page with
 /// a single Rust listing used to pay for the other thirteen.
 fn grammars() -> &'static HashMap<&'static str, Lazy> {
@@ -335,6 +374,7 @@ mod tests {
             "yaml",
             "html",
             "css",
+            "sql",
         ] {
             assert!(
                 highlight(name, "x").is_some(),
@@ -379,6 +419,28 @@ mod tests {
         assert!(html.contains("&lt;"), "unescaped `<`: {html}");
         assert!(html.contains("&gt;"), "unescaped `>`: {html}");
         assert!(html.contains("&amp;"), "unescaped `&`: {html}");
+    }
+
+    #[test]
+    fn highlights_sql_comments_and_numbers() {
+        let html = highlight("sql", "-- note\nSELECT 42, 1.5, 'x' FROM t;").unwrap_or_default();
+
+        assert!(
+            html.contains("<span class=\"hl-comment\">-- note"),
+            "comment left plain: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"hl-number\">42</span>"),
+            "integer not a number: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"hl-number\">1.5</span>"),
+            "decimal not a number: {html}"
+        );
+        assert!(
+            html.contains("<span class=\"hl-string\">&#39;x&#39;</span>"),
+            "string literal not a string: {html}"
+        );
     }
 
     #[test]
