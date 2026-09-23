@@ -5,7 +5,19 @@ versions are kept in step: all four are released together from one workspace.
 
 ## Unreleased
 
+## 0.3.1
+
+A PDF that a single emphasised syllable used to stop, block images that follow
+`:imagesdir:`, SQL listings in colour, and an image to run it all from.
+
 ### Added
+
+**SQL source blocks are highlighted on the page.** The grammar is
+`tree-sitter-sequel`, behind the same feature as the other grammars. Its
+highlight query is written for Neovim, so two patterns are appended to it for
+tree-sitter's own highlighter: without them a comment would have lost its colour
+and every number would have been coloured as a string. The PDF already
+highlighted SQL through Typst's own highlighter.
 
 **A container image, and a workflow that publishes it.** `nix build .#container`
 builds an image holding the binary and the libc closure behind it and nothing
@@ -36,6 +48,15 @@ resolved the same way now, by the rule the page uses — a URL, a `data:` URI an
 an absolute path say where they live already, and everything else is relative
 to `:imagesdir:` — so a document can keep its pictures in one directory and a
 block image can name one outside its own module.
+
+### Compatibility
+
+No public item was added, removed or changed in any of the four crates, so
+this is a patch. The output does move: a PDF with a mark against a word
+character now typesets, a block image with a relative `:imagesdir:` is looked
+for somewhere else, and an HTML listing marked `sql` gains `hl-*` spans.
+
+Minimum supported Rust version is still **1.96**.
 
 ## 0.3.0
 
