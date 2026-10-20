@@ -264,6 +264,9 @@
               # `resources/` holds two submodules the doctest suite and the
               # benchmarks read.
               pkgs.git
+
+              # `justfile` holds the release chain.
+              pkgs.just
             ];
           };
         }
