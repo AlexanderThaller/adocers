@@ -34,6 +34,11 @@ without rustfmt, so `cargo fmt` resolves correctly there.
 
 `nix develop` gives the pinned toolchain. `nix fmt` (nixfmt) formats `.nix`.
 
+Releases go through the `justfile`: write the notes under `## Unreleased` in
+`CHANGELOG.md`, then `just release X.Y.Z` runs `check`, `prepare`, `package` and
+`publish` in turn. Each link also runs on its own. `publish` cannot be undone, so
+it asks first.
+
 Before calling a change done, run all three commands above. For a change to
 either back end, also render `resources/showcase.adoc` before and after and
 confirm the output is byte-identical — or say in the commit what moved and why.

@@ -99,7 +99,7 @@ categories = ["command-line-utilities", "text-processing"]
 # whole, and `benches/` goes with it rather than shipping a target that panics
 # on the first file it cannot find. Both test suites already skip what they
 # cannot find. Excluding all of it takes the package from 7.1 MB to 129 KB.
-exclude = ["/resources/", "/benches/", "CLAUDE.md"]
+exclude = ["/resources/", "/benches/", "CLAUDE.md", "justfile"]
 
 # Build the documentation with everything switched on, so that items behind a
 # feature are in it rather than missing without explanation. Rustdoc labels
