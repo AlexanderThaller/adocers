@@ -98,7 +98,7 @@ _cargo-publish *args:
             !skip
         ' "$home/config.toml" > "$direct/config.toml"
     fi
-    CARGO_HOME="$direct" cargo publish --workspace --locked {{ args }}
+    CARGO_HOME="$direct" cargo publish --workspace --locked --registry crates-io {{ args }}
 
 _version:
     @sed -n -E 's/^version = "([^"]+)"$/\1/p' Cargo.toml
