@@ -8,6 +8,8 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -15,6 +17,7 @@
       self,
       nixpkgs,
       rust-overlay,
+      crane,
     }:
     let
       inherit (nixpkgs) lib;
@@ -36,15 +39,10 @@
       # overlay onto the caller's package set.
       rustBinFor = pkgs: rust-overlay.lib.mkRustBin { } pkgs;
 
-      rustPlatformFor =
-        pkgs:
-        let
-          toolchain = (rustBinFor pkgs).stable.latest.minimal;
-        in
-        pkgs.makeRustPlatform {
-          cargo = toolchain;
-          rustc = toolchain;
-        };
+      # Crane rather than `buildRustPackage`: the dependencies are a
+      # derivation of their own, which stays valid until `Cargo.lock` or the
+      # toolchain changes.
+      craneLibFor = pkgs: (crane.mkLib pkgs).overrideToolchain (p: (rustBinFor p).stable.latest.minimal);
 
       # What a dynamically linked build should look for at run time, or `[]`
       # where the question does not arise. See `postFixup` in `adocersPackage`.
@@ -86,59 +84,70 @@
       adocersPackage =
         {
           lib,
-          rustPlatform,
+          craneLib,
           runpath ? null,
         }:
-        rustPlatform.buildRustPackage {
-          pname = cargoToml.package.name;
-          inherit (cargoToml.workspace.package) version;
+        let
+          commonArgs = {
+            pname = cargoToml.package.name;
+            inherit (cargoToml.workspace.package) version;
 
-          src = source;
-
-          cargoLock.lockFile = ./Cargo.lock;
-
-          # The tree-sitter grammars are C, compiled by the `cc` crate; the
-          # stdenv compiler is all they need. Nothing else here links against a
-          # system library — Typst brings its own fonts and there is no
-          # OpenSSL — so the binary is self-contained.
-
-          # The suites drive the built binary, so they run here as they do
-          # under `cargo test` — with one exception. Nix copies the git tree
-          # without its submodules, so `resources/asciidoctor-doctest` is not
-          # in `src` and `tests/doctest.rs` takes the skip it documents for a
-          # fresh clone. To hold a build to the corpus as well, fetch this
-          # flake as `github:AlexanderThaller/adocers?submodules=1`.
-          doCheck = true;
-
-          # A full strip rather than the default `-S -p`. What is being removed
-          # is not only size: the debug information names the store paths the
-          # binary was linked against, and nix reads those as references — so
-          # an unstripped binary drags a compiler's worth of shared objects it
-          # never opens into the image behind it.
-          stripAllList = [ "bin" ];
-
-          # `libgcc_s.so.1` is the only file this binary ever opens out of
-          # gcc's `lib` output, and that output is ten megabytes of libstdc++
-          # and sanitizer runtimes it never touches — all of which the linker's
-          # runpath drags into the image behind that one shared object. nixpkgs
-          # also ships `libgcc_s.so.1` on its own, at 200 kB, and glibc already
-          # puts that in the closure, so narrowing the runpath to what is
-          # actually opened costs nothing and sheds the fat output.
-          postFixup = lib.optionalString (runpath != null && runpath != [ ]) ''
-            patchelf --set-rpath ${lib.makeLibraryPath runpath} $out/bin/adocers
-          '';
-
-          meta = {
-            inherit (cargoToml.package) description;
-            homepage = "https://github.com/AlexanderThaller/adocers";
-            license = with lib.licenses; [
-              mit
-              asl20
-            ];
-            mainProgram = "adocers";
-            platforms = lib.platforms.unix;
+            src = source;
+            strictDeps = true;
           };
-        };
+        in
+        craneLib.buildPackage (
+          commonArgs
+          // {
+            # The dependencies alone, from nothing but `Cargo.toml` and
+            # `Cargo.lock`, so a change to the code does not compile them again.
+            # Nothing downstream reads `cargo check`'s output, so that pass is
+            # skipped; the tests' dev-dependencies are compiled along.
+            cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { cargoCheckCommand = "true"; });
+
+            # The tree-sitter grammars are C, compiled by the `cc` crate; the
+            # stdenv compiler is all they need. Nothing else here links against a
+            # system library — Typst brings its own fonts and there is no
+            # OpenSSL — so the binary is self-contained.
+
+            # The suites drive the built binary, so they run here as they do
+            # under `cargo test` — with one exception. Nix copies the git tree
+            # without its submodules, so `resources/asciidoctor-doctest` is not
+            # in `src` and `tests/doctest.rs` takes the skip it documents for a
+            # fresh clone. To hold a build to the corpus as well, fetch this
+            # flake as `github:AlexanderThaller/adocers?submodules=1`.
+            doCheck = true;
+
+            # A full strip rather than the default `-S -p`. What is being removed
+            # is not only size: the debug information names the store paths the
+            # binary was linked against, and nix reads those as references — so
+            # an unstripped binary drags a compiler's worth of shared objects it
+            # never opens into the image behind it.
+            stripAllList = [ "bin" ];
+
+            # `libgcc_s.so.1` is the only file this binary ever opens out of
+            # gcc's `lib` output, and that output is ten megabytes of libstdc++
+            # and sanitizer runtimes it never touches — all of which the linker's
+            # runpath drags into the image behind that one shared object. nixpkgs
+            # also ships `libgcc_s.so.1` on its own, at 200 kB, and glibc already
+            # puts that in the closure, so narrowing the runpath to what is
+            # actually opened costs nothing and sheds the fat output.
+            postFixup = lib.optionalString (runpath != null && runpath != [ ]) ''
+              patchelf --set-rpath ${lib.makeLibraryPath runpath} $out/bin/adocers
+            '';
+
+            meta = {
+              inherit (cargoToml.package) description;
+              homepage = "https://github.com/AlexanderThaller/adocers";
+              license = with lib.licenses; [
+                mit
+                asl20
+              ];
+              mainProgram = "adocers";
+              platforms = lib.platforms.unix;
+            };
+          }
+        );
 
       # The container: the binary, the shared objects it opens and the libc
       # closure behind them, and nothing else. No shell, no `coreutils`, no
@@ -205,7 +214,7 @@
     {
       overlays.default = final: _prev: {
         adocers = final.callPackage adocersPackage {
-          rustPlatform = rustPlatformFor final;
+          craneLib = craneLibFor final;
           runpath = runpathFor final;
         };
       };
@@ -214,7 +223,7 @@
         pkgs:
         rec {
           adocers = pkgs.callPackage adocersPackage {
-            rustPlatform = rustPlatformFor pkgs;
+            craneLib = craneLibFor pkgs;
             runpath = runpathFor pkgs;
           };
 
