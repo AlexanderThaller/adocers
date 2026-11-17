@@ -57,6 +57,13 @@ const THEME: &[(&str, &str)] = &[
     // page. An element carrying its own `fill` — a pie slice, a git branch —
     // keeps it, because a presentation attribute outranks an inherited value.
     ("&", "fill:var(--fg);"),
+    // A label's box is sized from `merman`'s estimate of the text, because the
+    // reader's font is not known until the page reaches them. Where the font
+    // they get runs wider, the box would cut the label short — `USERS` drawn
+    // as `USER` — so the text is let past its edge instead. It runs into the
+    // padding mermaid leaves around every label, which is what that padding is
+    // for in a browser that measured the text itself.
+    ("foreignObject", "overflow:visible;"),
     (
         ".flowchartTitleText,.gitTitleText,.statediagramTitleText,.classTitleText",
         "fill:var(--fg);",
@@ -403,6 +410,15 @@ mod tests {
             svg.contains("#d1 [data-look=\"neo\"][data-color-id].node path"),
             "the tint should be overridden at its own specificity"
         );
+    }
+
+    #[test]
+    fn lets_a_label_run_past_its_estimated_box() {
+        let svg = svg("flowchart LR\n  A[one] --> B[two]", "d1").expect("renders");
+
+        // The box is sized by an estimate, not by the font the reader ends up
+        // with, and a `foreignObject` clips whatever overflows it.
+        assert!(svg.contains("#d1 foreignObject{overflow:visible;}"));
     }
 
     #[test]
