@@ -57,6 +57,13 @@ const THEME: &[(&str, &str)] = &[
     // page. An element carrying its own `fill` — a pie slice, a git branch —
     // keeps it, because a presentation attribute outranks an inherited value.
     ("&", "fill:var(--fg);"),
+    // A label's box is sized from `merman`'s estimate of the text, because the
+    // reader's font is not known until the page reaches them. Where the font
+    // they get runs wider, the box would cut the label short — `USERS` drawn
+    // as `USER` — so the text is let past its edge instead. It runs into the
+    // padding mermaid leaves around every label, which is what that padding is
+    // for in a browser that measured the text itself.
+    ("foreignObject", "overflow:visible;"),
     (
         ".flowchartTitleText,.gitTitleText,.statediagramTitleText,.classTitleText",
         "fill:var(--fg);",
@@ -64,6 +71,17 @@ const THEME: &[(&str, &str)] = &[
     // Flowcharts.
     (
         ".node rect,.node circle,.node ellipse,.node polygon,.node path",
+        "fill:var(--code-bg);stroke:var(--accent);",
+    ),
+    // Mermaid's "neo" look, which an entity-relationship diagram is drawn in,
+    // tints each node in a pastel picked by its position in the source. The
+    // tint says nothing about the entity, so it is chrome like any other box —
+    // and left in place, it puts the page's light text on a light box once the
+    // page is dark. Its rules carry two attribute selectors, which the plain
+    // node rule above cannot outrank, so these match them selector for
+    // selector and win on order.
+    (
+        "[data-look=\"neo\"][data-color-id].node path,[data-look=\"neo\"][data-color-id].node rect",
         "fill:var(--code-bg);stroke:var(--accent);",
     ),
     (".node .katex path", "fill:var(--fg);stroke:var(--fg);"),
@@ -77,7 +95,7 @@ const THEME: &[(&str, &str)] = &[
         "fill:var(--fg);color:var(--fg);",
     ),
     (
-        ".edgePaths .path,.edgePath .path,.flowchart-link,.transition,.relation",
+        ".edgePaths .path,.edgePath .path,.flowchart-link,.transition,.relation,.relationshipLine",
         "stroke:var(--muted);",
     ),
     (
@@ -370,6 +388,37 @@ mod tests {
             svg.contains("#d1 marker[id] path"),
             "arrowheads should follow the page"
         );
+    }
+
+    #[test]
+    fn puts_an_entity_s_box_on_the_page_s_colours() {
+        let svg = svg(
+            "erDiagram\n  USERS ||--o{ SESSIONS : has\n  USERS {\n    ulid id PK\n  }",
+            "d1",
+        )
+        .expect("renders");
+
+        // Each entity is tinted a pastel by `data-color-id`, under a rule that
+        // outranks the plain node rule. Unmatched, the box stays pale while
+        // its label takes the page's colour, which is unreadable on a dark
+        // page.
+        assert!(
+            svg.contains("data-color-id=\"color-0\""),
+            "entities are tinted"
+        );
+        assert!(
+            svg.contains("#d1 [data-look=\"neo\"][data-color-id].node path"),
+            "the tint should be overridden at its own specificity"
+        );
+    }
+
+    #[test]
+    fn lets_a_label_run_past_its_estimated_box() {
+        let svg = svg("flowchart LR\n  A[one] --> B[two]", "d1").expect("renders");
+
+        // The box is sized by an estimate, not by the font the reader ends up
+        // with, and a `foreignObject` clips whatever overflows it.
+        assert!(svg.contains("#d1 foreignObject{overflow:visible;}"));
     }
 
     #[test]

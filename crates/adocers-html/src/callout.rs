@@ -62,8 +62,8 @@ pub(crate) fn strip(source: &str, callouts: &[Callout]) -> String {
         .enumerate()
         .map(
             |(index, line)| match callouts.iter().find(|c| c.line == index) {
-                // The marker is always the last thing on its line, so cutting it
-                // off cannot disturb anything the highlighter needs.
+                // The marker is always the last thing on its line, so cutting
+                // it off cannot disturb anything the highlighter needs.
                 Some(callout) => {
                     let marker = format!("<{}>", callout.number);
                     line.strip_suffix(&marker).unwrap_or(line).to_string()
