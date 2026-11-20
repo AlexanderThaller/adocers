@@ -5,6 +5,22 @@ versions are kept in step: all four are released together from one workspace.
 
 ## Unreleased
 
+### Added
+
+**`adocers-review`, a separate binary for reviewing on a phone.** It serves a
+directory as `serve` does, rendered with the same pipeline and options, and
+lets a reader tap a block and comment on it. The comments are kept as JSON
+under `.adocers-review/` at the root of the tree, anchored to the text of their
+block rather than to a line. It is not published to crates.io yet.
+
+### Changed
+
+**`serve` listens on a free port by default.** The default `--bind` was
+`127.0.0.1:8080`, so a second server failed to start until the first was
+stopped or given another port by hand. It is `127.0.0.1:0` now, which leaves
+the port to the system; the address it chose is printed on start, as before.
+Pass `--bind 8080` to keep the old one.
+
 ## 0.3.1
 
 A PDF that a single emphasised syllable used to stop, block images that follow

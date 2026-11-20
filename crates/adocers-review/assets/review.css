@@ -1,0 +1,296 @@
+/* The review layer: what the script adds to a document, and the listing.
+   Colours come from the page's own variables, with fallbacks for a page
+   rendered without a stylesheet. */
+
+.review-page {
+  /* Room for the bar, so it never covers the end of the document. */
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+#content .review-block {
+  cursor: pointer;
+  scroll-margin-top: 1rem;
+  border-radius: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#content .review-selected {
+  outline: 2px solid var(--accent, #2a6dc0);
+  outline-offset: 4px;
+  background: color-mix(in srgb, var(--accent, #2a6dc0) 7%, transparent);
+}
+
+#content .review-has {
+  position: relative;
+  box-shadow: -6px 0 0 -3px var(--accent, #2a6dc0);
+}
+
+#content .review-has::after {
+  content: attr(data-review-count);
+  position: absolute;
+  top: -0.6rem;
+  right: -0.3rem;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent, #2a6dc0);
+  color: var(--bg, #fff);
+  font: 600 0.75rem/1.4rem system-ui, sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+
+.review-ui {
+  box-sizing: border-box;
+  font: 1rem/1.45 system-ui, sans-serif;
+  color: var(--fg, #222);
+}
+
+.review-ui * {
+  box-sizing: border-box;
+}
+
+.review-ui button,
+.review-ui input,
+.review-ui textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.review-ui button {
+  min-height: 2.5rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--rule, #ccc);
+  border-radius: 999px;
+  background: var(--bg, #fff);
+  cursor: pointer;
+}
+
+.review-ui .review-primary {
+  border-color: var(--accent, #2a6dc0);
+  background: var(--accent, #2a6dc0);
+  color: var(--bg, #fff);
+  font-weight: 600;
+}
+
+.review-ui .review-danger {
+  color: var(--admon-caution, #b3261e);
+}
+
+.review-bar {
+  position: fixed;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--rule, #ccc);
+  background: var(--bg, #fff);
+}
+
+.review-hint {
+  color: var(--muted, #666);
+  font-size: 0.9rem;
+}
+
+.review-sheet {
+  position: fixed;
+  z-index: 21;
+  left: 0;
+  right: 0;
+  bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+  max-height: 60vh;
+  max-height: 60dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--rule, #ccc);
+  border-radius: 14px 14px 0 0;
+  background: var(--bg, #fff);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.18);
+}
+
+.review-sheet[hidden] {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .review-sheet {
+    left: auto;
+    width: 26rem;
+    right: 1rem;
+    border: 1px solid var(--rule, #ccc);
+    border-radius: 14px;
+  }
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.review-title {
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--muted, #666);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.review-ui .review-close {
+  min-width: 2.5rem;
+  padding: 0;
+  border: 0;
+}
+
+.review-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-comment {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--rule, #ccc);
+}
+
+.review-comment p {
+  margin: 0 0 0.3rem;
+}
+
+.review-resolved {
+  opacity: 0.6;
+}
+
+.review-ui .review-quote {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  margin: 0 0 0.3rem;
+  padding: 0 0 0 0.6rem;
+  border: 0;
+  border-left: 3px solid var(--accent, #2a6dc0);
+  border-radius: 0;
+  background: none;
+  color: var(--muted, #666);
+  font-size: 0.85rem;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-ui .review-outdated {
+  border-left-color: var(--admon-warning, #b06000);
+  white-space: normal;
+}
+
+.review-meta {
+  color: var(--muted, #666);
+  font-size: 0.85rem;
+}
+
+.review-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.review-ui .review-actions button {
+  min-height: 2.25rem;
+  font-size: 0.85rem;
+}
+
+.review-form {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.review-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* 16px or more, or iOS zooms the page in on focus. */
+.review-ui textarea,
+.review-ui input[type="text"] {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--rule, #ccc);
+  border-radius: 8px;
+  background: var(--code-bg, #f6f6f6);
+  font-size: max(16px, 1rem);
+}
+
+.review-ui textarea {
+  resize: vertical;
+}
+
+.review-ui .review-name {
+  flex: 1;
+}
+
+.review-error {
+  margin: 0.5rem 0 0;
+  color: var(--admon-caution, #b3261e);
+}
+
+.review-empty {
+  margin: 0.5rem 0;
+  color: var(--muted, #666);
+}
+
+/* The listing: one tappable row per document. */
+
+.review-listing {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-listing a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.25rem;
+  border-bottom: 1px solid var(--rule, #ccc);
+  text-decoration: none;
+}
+
+.review-listing .review-name {
+  overflow-wrap: anywhere;
+}
+
+.review-count {
+  flex: none;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent, #2a6dc0);
+  color: var(--bg, #fff);
+  font-size: 0.8rem;
+  font-weight: 600;
+}

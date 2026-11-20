@@ -213,7 +213,10 @@ pub struct ServeArgs {
     pub root: PathBuf,
 
     /// Address to listen on, as `HOST:PORT` or just a port number.
-    #[arg(short, long, value_name = "ADDR", default_value = "127.0.0.1:8080")]
+    ///
+    /// The default port, 0, asks the system for a free one, so that several
+    /// servers can run side by side; the address chosen is printed on start.
+    #[arg(short, long, value_name = "ADDR", default_value = "127.0.0.1:0")]
     pub bind: String,
 
     /// Document to render for a directory, tried in the order given.

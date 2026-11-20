@@ -205,7 +205,7 @@ second Ctrl+C quits at once without waiting for it.
 
 | Option | Effect |
 | --- | --- |
-| `-b, --bind <ADDR>` | `HOST:PORT`, or a bare port number for `127.0.0.1`. Default `127.0.0.1:8080`. |
+| `-b, --bind <ADDR>` | `HOST:PORT`, or a bare port number for `127.0.0.1`. Default `127.0.0.1:0`: a free port the system picks, printed when the server starts, so several can run at once. |
 | `--index-file <NAME>` | Document rendered in place of a directory, tried in order. Repeatable, and *replaces* the defaults (`INDEX.adoc`, then `README.adoc`) rather than adding to them. |
 | `--no-index-file` | Never stand a document in for a directory; go straight to the listing. |
 | `--no-listing` | Do not offer a browsable listing. A directory with no index document is then a 404. |
