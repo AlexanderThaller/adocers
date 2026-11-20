@@ -5,6 +5,14 @@ versions are kept in step: all four are released together from one workspace.
 
 ## Unreleased
 
+### Added
+
+**`adocers-review`, a separate binary for reviewing on a phone.** It serves a
+directory as `serve` does, rendered with the same pipeline and options, and
+lets a reader tap a block and comment on it. The comments are kept as JSON
+under `.adocers-review/` at the root of the tree, anchored to the text of their
+block rather than to a line. It is not published to crates.io yet.
+
 ### Changed
 
 **`serve` listens on a free port by default.** The default `--bind` was

@@ -1,0 +1,51 @@
+[package]
+name = "adocers-review"
+description = "Read a directory of AsciiDoc on a phone and leave comments on its blocks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["asciidoc", "review", "comments", "preview"]
+categories = ["command-line-utilities", "text-processing"]
+# A tool of its own while its shape settles, rather than a promise on crates.io.
+publish = false
+
+# These forward to `adocers`, rather than being switched on in the dependency
+# below, so that `--no-default-features` over the workspace still builds the
+# main crate without them. A feature this crate asked for there would be
+# unified into every build of the workspace, and the pass that is meant to test
+# `adocers` without equations would quietly test it with them.
+[features]
+default = ["highlight", "math", "mermaid"]
+highlight = ["adocers/highlight"]
+math = ["adocers/math"]
+mermaid = ["adocers/mermaid"]
+
+[dependencies]
+adocers = { path = "../..", default-features = false }
+anyhow.workspace = true
+axum = { version = "0.8", default-features = false, features = [
+  "http1",
+  "json",
+  "query",
+  "tokio",
+] }
+clap = { version = "4", features = ["derive"] }
+percent-encoding = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "net",
+  "signal",
+  "fs",
+] }
+tokio-util = { version = "0.7", default-features = false, features = ["io"] }
+tower-http = { version = "0.7", features = [
+  "compression-gzip",
+  "compression-br",
+] }
+
+[lints]
+workspace = true
