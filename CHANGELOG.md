@@ -13,6 +13,11 @@ lets a reader tap a block and comment on it. The comments are kept as JSON
 under `.adocers-review/` at the root of the tree, anchored to the text of their
 block rather than to a line. It is not published to crates.io yet.
 
+**The flake builds `adocers-review` too.** It is a package, an app and a check
+of its own, and the overlay adds `pkgs.adocers-review` beside `pkgs.adocers`:
+`nix run github:AlexanderThaller/adocers#adocers-review -- docs/`. Both share
+one build of the workspace's dependencies.
+
 ### Changed
 
 **`serve` listens on a free port by default.** The default `--bind` was

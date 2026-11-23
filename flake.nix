@@ -79,31 +79,56 @@
         ];
       };
 
-      # The package as a nixpkgs-style file, so `callPackage` can supply its
-      # arguments and an overlay can reuse it unchanged.
-      adocersPackage =
+      # One binary of the workspace as a nixpkgs-style package, so `callPackage`
+      # can supply its arguments and an overlay can reuse it unchanged. `crate`
+      # is the package's name in the workspace and the name of its binary:
+      # `adocers` at the root, or `adocers-review` under `crates/`.
+      binaryPackage =
+        crate:
         {
           lib,
           craneLib,
           runpath ? null,
         }:
         let
-          commonArgs = {
+          # The arguments of the dependency build below, the same for every
+          # binary, so their `cargoArtifacts` are one derivation, built once.
+          depsArgs = {
             pname = cargoToml.package.name;
             inherit (cargoToml.workspace.package) version;
 
             src = source;
             strictDeps = true;
           };
+          crateManifest =
+            if crate == cargoToml.package.name then
+              cargoToml.package
+            else
+              (lib.importTOML ./crates/${crate}/Cargo.toml).package;
         in
         craneLib.buildPackage (
-          commonArgs
+          depsArgs
           // {
+            pname = crate;
+
             # The dependencies alone, from nothing but `Cargo.toml` and
             # `Cargo.lock`, so a change to the code does not compile them again.
             # Nothing downstream reads `cargo check`'s output, so that pass is
-            # skipped; the tests' dev-dependencies are compiled along.
-            cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { cargoCheckCommand = "true"; });
+            # skipped; the tests' dev-dependencies are compiled along. Those of
+            # every crate in the workspace, so that this one derivation serves
+            # each binary: at the root alone, cargo would compile only the
+            # dependencies of `adocers`.
+            cargoArtifacts = craneLib.buildDepsOnly (
+              depsArgs
+              // {
+                cargoCheckCommand = "true";
+                cargoExtraArgs = "--locked --workspace";
+              }
+            );
+
+            # Build, test and install this crate alone. Without `--package`,
+            # cargo at the root would build only `adocers`, whatever `crate` is.
+            cargoExtraArgs = "--locked --package ${crate}";
 
             # The tree-sitter grammars are C, compiled by the `cc` crate; the
             # stdenv compiler is all they need. Nothing else here links against a
@@ -133,17 +158,17 @@
             # puts that in the closure, so narrowing the runpath to what is
             # actually opened costs nothing and sheds the fat output.
             postFixup = lib.optionalString (runpath != null && runpath != [ ]) ''
-              patchelf --set-rpath ${lib.makeLibraryPath runpath} $out/bin/adocers
+              patchelf --set-rpath ${lib.makeLibraryPath runpath} $out/bin/${crate}
             '';
 
             meta = {
-              inherit (cargoToml.package) description;
+              inherit (crateManifest) description;
               homepage = "https://github.com/AlexanderThaller/adocers";
               license = with lib.licenses; [
                 mit
                 asl20
               ];
-              mainProgram = "adocers";
+              mainProgram = crate;
               platforms = lib.platforms.unix;
             };
           }
@@ -213,7 +238,11 @@
     in
     {
       overlays.default = final: _prev: {
-        adocers = final.callPackage adocersPackage {
+        adocers = final.callPackage (binaryPackage "adocers") {
+          craneLib = craneLibFor final;
+          runpath = runpathFor final;
+        };
+        adocers-review = final.callPackage (binaryPackage "adocers-review") {
           craneLib = craneLibFor final;
           runpath = runpathFor final;
         };
@@ -222,7 +251,12 @@
       packages = forAllSystems (
         pkgs:
         rec {
-          adocers = pkgs.callPackage adocersPackage {
+          adocers = pkgs.callPackage (binaryPackage "adocers") {
+            craneLib = craneLibFor pkgs;
+            runpath = runpathFor pkgs;
+          };
+
+          adocers-review = pkgs.callPackage (binaryPackage "adocers-review") {
             craneLib = craneLibFor pkgs;
             runpath = runpathFor pkgs;
           };
@@ -239,6 +273,11 @@
           type = "app";
           program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.adocers;
           meta.description = "Render AsciiDoc documents to HTML or PDF";
+        };
+        adocers-review = {
+          type = "app";
+          program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.adocers-review;
+          meta.description = "Read a directory of AsciiDoc on a phone and comment on its blocks";
         };
         default = adocers;
       });
@@ -282,7 +321,7 @@
       );
 
       checks = forAllSystems (pkgs: {
-        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) adocers;
+        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) adocers adocers-review;
       });
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt);
